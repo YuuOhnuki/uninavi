@@ -1,19 +1,17 @@
-import type { ReactElement } from 'react';
+import type { Metadata } from 'next';
 
-import { FeaturesSection } from '@/components/sections/features-section';
-import { GettingStartedSection } from '@/components/sections/getting-started-section';
-import { HeroSection } from '@/components/sections/hero-section';
-import { TechStackSection } from '@/components/sections/tech-stack-section';
-import { ToolingSection } from '@/components/sections/tooling-section';
+import { HomeClient } from '@/components/features/home/home-client';
 
-export default function Home(): ReactElement {
+export const metadata: Metadata = {
+    title: 'UniNavi | AI大学検索プラットフォーム',
+    description:
+        'AIが大学情報を検索・要約して届けるUniNavi。地域や学部、入試形態から希望に合った進学先を見つけましょう。',
+};
+
+export default function HomePage(): React.ReactElement {
     return (
-        <div className="flex flex-col gap-20 pb-12">
-            <HeroSection />
-            <GettingStartedSection />
-            <FeaturesSection />
-            <TechStackSection />
-            <ToolingSection />
+        <div className="space-y-16">
+            <HomeClient />
         </div>
     );
 }
