@@ -397,6 +397,7 @@ async def filter_universities_by_conditions(
     universities: List[dict],
     filters: Dict[str, str],
     progress_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+    university_callback: Optional[Callable[[dict], Awaitable[None]]] = None,
 ) -> List[dict]:
     """
     Filter universities based on search conditions using AI verification
@@ -1173,7 +1174,7 @@ async def search_universities(
         "qualification": qualification,
         "exam_schedule": exam_schedule,
     }
-    universities = await filter_universities_by_conditions(universities, filters_dict, progress_callback)
+    universities = await filter_universities_by_conditions(universities, filters_dict, progress_callback, university_callback)
 
     # Deduplicate by (name, faculty, examType) keeping entries with preferred sources
     def _src_score(urls: list) -> int:
