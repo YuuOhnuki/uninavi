@@ -4,8 +4,9 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const NAVIGATION_LINKS = [
-    { href: '#search', label: '検索' },
-    { href: '#favorites', label: 'お気に入り' },
+    { href: '/search', label: '検索' },
+    { href: '/favorites', label: 'お気に入り' },
+    { href: '/schedule', label: 'スケジュール' },
 ];
 
 const Header = (): React.ReactElement => {

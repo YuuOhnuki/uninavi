@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
-import { HomeClient } from '@/components/features/home/home-client';
+import Footer from '@/components/layout/Footer';
+import { LandingPage } from '@/components/features/home/LandingPage';
 
 export const metadata: Metadata = {
     title: 'UniNavi | AI大学検索プラットフォーム',
@@ -10,8 +11,10 @@ export const metadata: Metadata = {
 
 export default function HomePage(): React.ReactElement {
     return (
-        <div className="space-y-16">
-            <HomeClient />
+        <div className="flex min-h-screen flex-col">
+            <main className="flex-1">
+                <LandingPage />
+            </main>
         </div>
     );
 }

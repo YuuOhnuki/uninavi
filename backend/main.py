@@ -7,7 +7,7 @@ import asyncio
 import contextlib
 import json
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -15,13 +15,13 @@ from typing import List, Optional
 import os
 import logging
 import traceback
-# 💡 .envから環境変数をロードするためにdotenvライブラリを追加
-from dotenv import load_dotenv # 👈 追加
+# .envから環境変数をロードするためにdotenvライブラリを追加
+from dotenv import load_dotenv # 追加
 
-# 🚨 【修正】環境変数ロード
-load_dotenv() # 👈 追加: .envファイルから環境変数を読み込む
+# 環境変数ロード
+load_dotenv() # 追加: .envファイルから環境変数を読み込む
 
-# 🚨 【修正なし】インポートは前回の修正のまま（ファイル名がservices/ai_search.pyの場合）
+# インポートは前回の修正のまま（ファイル名がservices/ai_search.pyの場合）
 from services.ai_search import chat_with_ai, chat_with_ai_stream 
 from services.summarize import search_universities
 
@@ -37,7 +37,7 @@ app = FastAPI(title="UniNavi API", version="1.0.0")
 # CORS configuration for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "https://*.vercel.app"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "https://*.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -195,6 +195,10 @@ async def search_stream_endpoint(request: Request, search_request: SearchRequest
     async def progress_callback(payload: dict) -> None:
         await queue.put(("progress", payload))
 
+    async def university_callback(university: dict) -> None:
+        """Callback to stream individual university results as they are filtered."""
+        await queue.put(("university", {"university": university}))
+
     async def run_search() -> None:
         try:
             universities = await search_universities(
@@ -214,6 +218,7 @@ async def search_stream_endpoint(request: Request, search_request: SearchRequest
                 qualification=search_request.qualification,
                 exam_schedule=search_request.examSchedule,
                 progress_callback=progress_callback,
+                university_callback=university_callback,
             )
             await queue.put(("results", {"universities": universities}))
         except Exception as exc:  # noqa: BLE001
@@ -230,8 +235,12 @@ async def search_stream_endpoint(request: Request, search_request: SearchRequest
 
                 if event_type == "progress":
                     yield _format_sse("progress", payload)
+                elif event_type == "university":
+                    # Stream individual university results as they are filtered
+                    university_data = payload.get("university", {})
+                    yield _format_sse("university", {"university": university_data})
                 elif event_type == "results":
-                    universities = payload.get("universities", [])
+                    universities = payload.get("universities") or []
                     total = len(universities)
                     if total == 0:
                         yield _format_sse("complete", {"total": 0})
@@ -260,7 +269,11 @@ async def search_stream_endpoint(request: Request, search_request: SearchRequest
                 with contextlib.suppress(asyncio.CancelledError):
                     await search_task
 
-    return StreamingResponse(event_generator(request), media_type="text/event-stream")
+    response = StreamingResponse(event_generator(request), media_type="text/event-stream")
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept"
+    return response
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -270,7 +283,7 @@ async def chat_endpoint(request: ChatRequest):
     """
     logger.info(f"Received chat request: {request.message[:50]}...")
     
-    # 🚨 【修正箇所】履歴変換ロジックを修正
+    # 履歴変換ロジックを修正
     # ChatMessage (role/content) のリストを、
     # chat_with_aiが期待する `{"question": "...", "answer": "..."}` 形式のリストに変換
     history_dicts = []
@@ -338,7 +351,11 @@ async def chat_stream_endpoint(request: Request, payload: ChatRequest):
             logger.error(f"Chat streaming failed: {exc}")
             yield _format_sse("error", {"message": str(exc)})
 
-    return StreamingResponse(event_generator(request), media_type="text/event-stream")
+    response = StreamingResponse(event_generator(request), media_type="text/event-stream")
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept"
+    return response
 
 
 if __name__ == "__main__":

@@ -286,7 +286,7 @@ export function ChatDrawer(): React.ReactElement {
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
                 <SheetContent
                     side="right"
-                    className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-md"
+                    className="flex h-full w-full flex-col gap-0 p-0 sm:max-w-md lg:max-w-2xl"
                     aria-describedby="chat-description"
                 >
                     <SheetHeader className="border-border flex flex-row items-center justify-between border-b px-5 py-4">
@@ -310,7 +310,7 @@ export function ChatDrawer(): React.ReactElement {
                         </Button>
                     </SheetHeader>
 
-                    <ScrollArea className="max-h-[calc(100vh-14rem)] flex-1 px-6" aria-live="polite">
+                    <ScrollArea className="max-h-[calc(100vh-14rem)] flex-1 p-2 px-6" aria-live="polite">
                         <div className="space-y-3">
                             {messages.length === 0 ? (
                                 <div className="border-border/70 bg-muted/30 text-muted-foreground rounded-lg border border-dashed p-4 text-center text-sm">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, Settings } from 'lucide-react';
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
@@ -126,7 +126,7 @@ interface FormState {
  * Provides responsive, accessible controls for filtering university queries.
  */
 export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
-    const [formState, setFormState] = useState<FormState>({
+    const initialFormState: FormState = {
         region: 'all',
         prefecture: '指定なし',
         faculty: '',
@@ -145,7 +145,9 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         additionalSubjects: [],
         examMonths: [],
         examDayRange: DEFAULT_EXAM_DAY_RANGE,
-    });
+    };
+
+    const [formState, setFormState] = useState<FormState>(initialFormState);
 
     const regionItems = useMemo(
         () =>
@@ -209,6 +211,10 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
     function handleTextInput(event: React.ChangeEvent<HTMLInputElement>) {
         const { name, value } = event.target;
         updateFormState(name as keyof FormState, value as FormState[keyof FormState]);
+    }
+
+    function handleReset(): void {
+        setFormState(initialFormState);
     }
 
     return (
@@ -280,27 +286,27 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <Label htmlFor="useCommonTest">共通テスト利用</Label>
+                            <Label htmlFor="institutionType">学校種別</Label>
                             <Select
-                                value={formState.useCommonTest}
+                                value={formState.institutionType}
                                 onValueChange={(value) =>
-                                    updateFormState('useCommonTest', value as FormState['useCommonTest'])
+                                    updateFormState('institutionType', value as FormState['institutionType'])
                                 }
                             >
-                                <SelectTrigger id="useCommonTest" aria-describedby="search-hint" className="w-full">
+                                <SelectTrigger id="institutionType" aria-describedby="search-hint" className="w-full">
                                     <SelectValue placeholder="指定なし" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {commonTestItems.map(({ value, label }) => (
-                                        <SelectItem key={label} value={value}>
-                                            {label}
+                                    {INSTITUTION_TYPES.map((type) => (
+                                        <SelectItem key={type} value={type}>
+                                            {type}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div className="flex flex-col gap-2 md:col-span-2">
                             <Label htmlFor="nameKeyword">大学名・キーワード</Label>
                             <Input
                                 id="nameKeyword"
@@ -321,7 +327,12 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 <CardContent className="pt-0">
                     <Accordion type="single" collapsible className="w-full">
                         <AccordionItem value="advanced">
-                            <AccordionTrigger className="text-base">詳細検索条件</AccordionTrigger>
+                            <AccordionTrigger className="">
+                                <div className="flex items-center gap-2">
+                                    <Settings className="size-4" aria-hidden="true" />
+                                    詳細検索条件
+                                </div>
+                            </AccordionTrigger>
                             <AccordionContent>
                                 <div className="space-y-8">
                                     <section aria-labelledby="difficulty-label" className="space-y-4">
@@ -397,30 +408,6 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                                                     {PREFECTURES.map((prefecture) => (
                                                         <SelectItem key={prefecture} value={prefecture}>
                                                             {prefecture}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <Label htmlFor="institutionType">学校種別</Label>
-                                            <Select
-                                                value={formState.institutionType}
-                                                onValueChange={(value) =>
-                                                    updateFormState(
-                                                        'institutionType',
-                                                        value as FormState['institutionType']
-                                                    )
-                                                }
-                                            >
-                                                <SelectTrigger id="institutionType" className="w-full">
-                                                    <SelectValue placeholder="指定なし" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {INSTITUTION_TYPES.map((type) => (
-                                                        <SelectItem key={type} value={type}>
-                                                            {type}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -624,23 +611,31 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                     </Accordion>
                 </CardContent>
 
-                <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardFooter className="border-border/60 bg-muted/10 flex flex-col justify-between gap-4 border-t p-6 sm:flex-row sm:items-center">
                     <p className="text-muted-foreground text-sm">
-                        入力内容に応じてAIが関連する大学情報を検索し、要約を表示します。
+                        検索結果はブラウザ内に一時保存されます。お気に入り登録を使うと後で比較する際に便利です。
                     </p>
-                    <Button type="submit" className="w-full sm:w-auto" disabled={isLoading} aria-busy={isLoading}>
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                                検索中...
-                            </>
-                        ) : (
-                            <>
-                                <Search className="mr-2 size-4" aria-hidden="true" />
-                                検索する
-                            </>
-                        )}
-                    </Button>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleReset}
+                            disabled={isLoading}
+                            className="min-w-[140px]"
+                        >
+                            条件をリセット
+                        </Button>
+                        <Button type="submit" size="lg" className="min-w-[180px]" disabled={isLoading}>
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                                    検索中...
+                                </>
+                            ) : (
+                                '条件で検索する'
+                            )}
+                        </Button>
+                    </div>
                 </CardFooter>
             </Card>
         </form>

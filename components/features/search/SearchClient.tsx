@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-import { ChatDrawer } from '@/components/layout/ChatDrawer';
 import { SearchFilters, SearchForm } from '@/components/layout/SearchForm';
 import { type University, UniversityCard } from '@/components/layout/UniversityCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -13,10 +12,9 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFavorites } from '@/hooks/use-favorites';
 
-const SKELETON_PLACEHOLDERS = [1, 2, 3];
+const SKELETON_PLACEHOLDERS = [1, 2, 3, 4];
 
 type ProgressState = {
     stage: string;
@@ -90,30 +88,16 @@ const MOCK_UNIVERSITIES: ReadonlyArray<University> = [
 
 const PROGRESS_STAGE_LABELS: Record<string, string> = {
     initializing: '準備中',
+    model_selected: 'モデル選択',
     query_built: 'クエリ生成',
     searching: '検索中',
     search_complete: '検索完了',
     summarizing: '要約生成中',
     summarize_complete: '要約完了',
+    filtering: '条件確認中',
+    filter_complete: '確認完了',
     completed: '完了',
 };
-
-interface SearchTabsSectionProps {
-    isLoading: boolean;
-    onSearch: (filters: SearchFilters) => void;
-    favorites: ReadonlyArray<University>;
-    onToggleFavorite: (university: University) => void;
-}
-
-interface FavoritesPanelProps {
-    favorites: ReadonlyArray<University>;
-    onToggleFavorite: (university: University) => void;
-}
-
-interface FavoriteSummaryTableProps {
-    summary: Array<[string, number]>;
-    total: number;
-}
 
 interface SearchStatusSectionProps {
     isLoading: boolean;
@@ -148,115 +132,26 @@ interface SearchErrorAlertProps {
 function HeroSection(): ReactElement {
     return (
         <section className="text-center">
-            <p className="text-primary/80 text-xs font-medium tracking-[0.3em] uppercase">University Navigator</p>
-            <h1 className="text-foreground mt-3 text-4xl font-bold md:text-5xl">UniNavi へようこそ</h1>
+            <p className="text-primary/80 text-xs font-medium tracking-[0.3em] uppercase">University Search</p>
+            <h1 className="text-foreground mt-3 text-4xl font-bold md:text-5xl">大学検索</h1>
             <p className="text-muted-foreground mt-4 text-lg md:text-xl">
-                AIが大学情報を検索・要約してお届けします。あなたにぴったりの進路を見つけましょう。
+                AIが大学情報を検索・要約してあなたにぴったりの進路をお届けします。
             </p>
         </section>
     );
 }
 
-function SearchTabsSection({ isLoading, onSearch, favorites, onToggleFavorite }: SearchTabsSectionProps): ReactElement {
+function SearchSection({
+    onSearch,
+    isLoading,
+}: {
+    onSearch: (filters: SearchFilters) => void;
+    isLoading: boolean;
+}): ReactElement {
     return (
-        <section id="search" className="space-y-6">
-            <Tabs defaultValue="search" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="search">検索</TabsTrigger>
-                    <TabsTrigger value="favorites">お気に入り</TabsTrigger>
-                </TabsList>
-                <TabsContent value="search" className="space-y-6">
-                    <SearchForm onSearch={onSearch} isLoading={isLoading} />
-                </TabsContent>
-                <TabsContent value="favorites" className="space-y-6">
-                    <FavoritesPanel favorites={favorites} onToggleFavorite={onToggleFavorite} />
-                </TabsContent>
-            </Tabs>
+        <section className="space-y-6">
+            <SearchForm onSearch={onSearch} isLoading={isLoading} />
         </section>
-    );
-}
-
-function FavoritesPanel({ favorites, onToggleFavorite }: FavoritesPanelProps): ReactElement {
-    const examTypeSummary = favorites.reduce<Record<string, number>>((accumulator, university) => {
-        const type = university.examType.trim() || '未設定';
-        accumulator[type] = (accumulator[type] ?? 0) + 1;
-        return accumulator;
-    }, {});
-    const summaryEntries = Object.entries(examTypeSummary).sort(([, a], [, b]) => b - a);
-
-    return (
-        <Card className="shadow-sm">
-            <CardHeader className="space-y-2">
-                <CardTitle className="text-foreground text-xl font-semibold">お気に入り一覧</CardTitle>
-                <CardDescription className="text-muted-foreground text-sm">
-                    気になる大学を保存して、あとから一覧で比較できます。
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 p-6">
-                {favorites.length === 0 ? (
-                    <FavoritesEmptyState />
-                ) : (
-                    <>
-                        <FavoriteSummaryTable summary={summaryEntries} total={favorites.length} />
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                            {favorites.map((university) => (
-                                <UniversityCard
-                                    key={`${university.id}-${university.faculty}-${university.examType}-favorite`}
-                                    university={university}
-                                    favorite
-                                    onToggleFavorite={onToggleFavorite}
-                                />
-                            ))}
-                        </div>
-                    </>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
-function FavoriteSummaryTable({ summary, total }: FavoriteSummaryTableProps): ReactElement | null {
-    if (summary.length === 0) {
-        return null;
-    }
-
-    return (
-        <div className="border-border/60 bg-muted/40 rounded-lg border">
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <p className="text-foreground text-sm font-medium">お気に入り内訳</p>
-                <Badge variant="secondary">合計 {total} 件</Badge>
-            </div>
-            <Separator />
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-2/3">入試形態</TableHead>
-                        <TableHead className="w-1/3 text-right">件数</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {summary.map(([examType, count]) => (
-                        <TableRow key={examType}>
-                            <TableCell className="text-foreground text-sm">{examType}</TableCell>
-                            <TableCell className="text-right">
-                                <Badge variant="outline">{count} 件</Badge>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
-    );
-}
-
-function FavoritesEmptyState(): ReactElement {
-    return (
-        <div className="border-border/70 bg-muted/30 text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-            <p className="text-foreground font-medium">お気に入りに登録した大学はありません。</p>
-            <p className="text-muted-foreground/80 mt-2 text-xs">
-                検索結果から「ブックマーク」アイコンを押すと、この一覧に追加されます。
-            </p>
-        </div>
     );
 }
 
@@ -460,8 +355,8 @@ function SearchErrorAlert({ error }: SearchErrorAlertProps): ReactElement | null
     );
 }
 
-export function HomeClient(): React.ReactElement {
-    const { favorites, toggleFavorite, isFavorite, syncFavorite } = useFavorites();
+export function SearchClient(): ReactElement {
+    const { toggleFavorite, isFavorite, syncFavorite } = useFavorites();
     const [universities, setUniversities] = useState<University[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -511,11 +406,14 @@ export function HomeClient(): React.ReactElement {
 
         const stageProgress: Record<string, number> = {
             initializing: 5,
+            model_selected: 10,
             query_built: 15,
             searching: 50,
             search_complete: 65,
             summarizing: 80,
-            summarize_complete: 90,
+            summarize_complete: 85,
+            filtering: 95,
+            filter_complete: 98,
             completed: 100,
         };
 
@@ -523,6 +421,11 @@ export function HomeClient(): React.ReactElement {
             switch (stage) {
                 case 'initializing':
                     return { stage, message: '検索の準備をしています...' };
+                case 'model_selected':
+                    return {
+                        stage,
+                        message: `AIモデルを選択しました: ${payload.model ?? '不明'}`,
+                    };
                 case 'query_built':
                     return {
                         stage,
@@ -554,6 +457,21 @@ export function HomeClient(): React.ReactElement {
                         stage,
                         message: '要約が完了しました。結果を整理しています。',
                     };
+                case 'filtering': {
+                    const current = Number(payload.current ?? 0);
+                    const total = Number(payload.total ?? 0);
+                    return {
+                        stage,
+                        message: `検索条件の確認中... (${current} / ${total})`,
+                        current,
+                        total,
+                    };
+                }
+                case 'filter_complete':
+                    return {
+                        stage,
+                        message: `条件確認が完了しました。${payload.filtered ?? 0}件の大学が条件に合致しました。`,
+                    };
                 case 'completed':
                     return {
                         stage,
@@ -577,6 +495,14 @@ export function HomeClient(): React.ReactElement {
                 const total = Number(payload.total ?? 0) || 1;
                 const value = 15 + Math.min(current / total, 1) * 35;
                 setProgressValue((prev) => Math.max(prev, Math.min(95, value)));
+                return;
+            }
+
+            if (stage === 'filtering') {
+                const current = Number(payload.current ?? 0);
+                const total = Number(payload.total ?? 0) || 1;
+                const value = 85 + Math.min(current / total, 1) * 10;
+                setProgressValue((prev) => Math.max(prev, Math.min(98, value)));
                 return;
             }
 
@@ -738,12 +664,7 @@ export function HomeClient(): React.ReactElement {
             <div className="space-y-12">
                 <HeroSection />
 
-                <SearchTabsSection
-                    isLoading={isLoading}
-                    onSearch={handleSearchCallback}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                />
+                <SearchSection onSearch={handleSearchCallback} isLoading={isLoading} />
 
                 <SearchErrorAlert error={error} />
 
@@ -776,7 +697,7 @@ export function HomeClient(): React.ReactElement {
                         ) : (
                             <ul className="space-y-1">
                                 {debugEvents.map((event, index) => (
-                                    <li key={`${event}-${index}`} className="text-muted-foreground font-mono">
+                                    <li key={index} className="font-mono">
                                         {event}
                                     </li>
                                 ))}
@@ -785,8 +706,6 @@ export function HomeClient(): React.ReactElement {
                     </div>
                 </aside>
             ) : null}
-
-            <ChatDrawer />
         </>
     );
 }

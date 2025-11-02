@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
+import { ChatDrawer } from '@/components/layout/ChatDrawer';
 import { FavoritesProvider } from '@/hooks/use-favorites';
 
 import './globals.css';
@@ -18,18 +19,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: 'UniNavi Next.js Starter',
-    description: 'Production-ready template featuring Shadcn UI and Tailwind CSS tooling.',
-    metadataBase: new URL('https://github.com/YuuOhnuki/nextjs-startar'),
+    title: 'UniNavi | AI大学ナビゲーション',
+    description:
+        'AIが入試スケジュールや配点情報をまとめて提案。大学選びと受験対策をサポートするUniNaviの公式サイトです。',
+    metadataBase: new URL('https://uninavi.jp'),
     openGraph: {
-        title: 'UniNavi Next.js Starter',
-        description: 'Production-ready template featuring Shadcn UI and Tailwind CSS tooling.',
+        title: 'UniNavi | AI大学ナビゲーション',
+        description:
+            'AIが入試スケジュールや配点情報をまとめて提案。大学選びと受験対策をサポートするUniNaviの公式サイトです。',
         type: 'website',
+        url: 'https://uninavi.jp',
+        siteName: 'UniNavi',
+        locale: 'ja_JP',
     },
     twitter: {
         card: 'summary_large_image',
-        title: 'UniNavi Next.js Starter',
-        description: 'Production-ready template featuring Shadcn UI and Tailwind CSS tooling.',
+        title: 'UniNavi | AI大学ナビゲーション',
+        description:
+            'AIが入試スケジュールや配点情報をまとめて提案。大学選びと受験対策をサポートするUniNaviの公式サイトです。',
     },
 };
 
@@ -55,6 +62,7 @@ export default function RootLayout({
                         {children}
                     </main>
                     <Footer />
+                    <ChatDrawer />
                 </FavoritesProvider>
             </body>
         </html>

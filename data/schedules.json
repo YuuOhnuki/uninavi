@@ -1,0 +1,53 @@
+[
+  {
+    "id": "schedule_1762077759193_4o516n63u",
+    "title": "大阪大学 基礎工学部 願書締切",
+    "date": "2025-01-17T15:00:00.000Z",
+    "type": "application_deadline",
+    "universityId": "3",
+    "description": "願書締切: 2025年1月18日",
+    "userId": "default",
+    "createdAt": "2025-11-02T10:02:39.193Z",
+    "updatedAt": "2025-11-02T10:02:39.193Z"
+  },
+  {
+    "id": "schedule_1762077759242_7wu2im2wv",
+    "title": "大阪大学 基礎工学部 入試試験",
+    "date": "2025-02-23T15:00:00.000Z",
+    "type": "exam",
+    "universityId": "3",
+    "description": "入試試験日: 2025年2月24日",
+    "userId": "default",
+    "createdAt": "2025-11-02T10:02:39.242Z",
+    "updatedAt": "2025-11-02T10:02:39.242Z"
+  },
+  {
+    "id": "schedule_1762077888163_q5dlw3kul",
+    "title": "a",
+    "date": "2025-11-03T15:00:00.000Z",
+    "type": "application_deadline",
+    "userId": "default",
+    "createdAt": "2025-11-02T10:04:48.163Z",
+    "updatedAt": "2025-11-02T11:22:52.478Z"
+  },
+  {
+    "id": "schedule_1762082504260_an2tez839",
+    "title": "東京都立大学 学部 入試試験",
+    "date": "2025-02-14T15:00:00.000Z",
+    "type": "exam",
+    "universityId": "02",
+    "description": "試験日: 2025年2月15日",
+    "userId": "default",
+    "createdAt": "2025-11-02T11:21:44.260Z",
+    "updatedAt": "2025-11-02T11:21:44.260Z"
+  },
+  {
+    "id": "schedule_1762082863544_882lxfx40",
+    "title": "da",
+    "date": "2025-11-02T11:27:38.663Z",
+    "type": "orientation",
+    "userId": "default",
+    "createdAt": "2025-11-02T11:27:43.544Z",
+    "updatedAt": "2025-11-02T11:27:43.544Z"
+  }
+]
