@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Loader2, MessageSquare, Send, Trash2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ export function ChatDrawer(): React.ReactElement {
     });
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [activeController, setActiveController] = useState<AbortController | null>(null);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -37,6 +39,12 @@ export function ChatDrawer(): React.ReactElement {
             localStorage.setItem('chatHistory', JSON.stringify(messages));
         }
     }, [messages]);
+
+    useEffect(() => {
+        return () => {
+            activeController?.abort();
+        };
+    }, [activeController]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -47,30 +55,204 @@ export function ChatDrawer(): React.ReactElement {
         if (!input.trim() || isLoading) return;
 
         const userMessage: Message = { role: 'user', content: input };
-        setMessages((prev) => [...prev, userMessage]);
+        const baseMessages = [...messages, userMessage];
+        const assistantIndex = baseMessages.length;
+        const placeholder: Message = { role: 'assistant', content: '' };
+
+        setMessages([...baseMessages, placeholder]);
         setInput('');
         setIsLoading(true);
 
+        const controller = new AbortController();
+        setActiveController(controller);
+
+        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/chat/stream`;
+
         try {
-            const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
-                message: userMessage.content,
-                history: messages,
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: userMessage.content,
+                    history: baseMessages,
+                }),
+                signal: controller.signal,
             });
 
-            const assistantMessage: Message = {
-                role: 'assistant',
-                content: response.data.message,
+            if (!response.ok || !response.body) {
+                throw new Error('Failed to start streaming response');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let assistantContent = '';
+            let buffer = '';
+            let isComplete = false;
+
+            const updateAssistantContent = (content: string) => {
+                setMessages((prev) => {
+                    if (assistantIndex >= prev.length) {
+                        return prev;
+                    }
+                    const next = [...prev];
+                    next[assistantIndex] = { role: 'assistant', content };
+                    return next;
+                });
             };
-            setMessages((prev) => [...prev, assistantMessage]);
+
+            const appendAssistantContent = (chunk: string) => {
+                if (!chunk) {
+                    return;
+                }
+                assistantContent += chunk;
+                updateAssistantContent(assistantContent);
+            };
+
+            const pickString = (value: unknown): string => {
+                if (typeof value === 'string') {
+                    return value;
+                }
+                if (Array.isArray(value)) {
+                    return value.map((item) => pickString(item)).join('');
+                }
+                if (value && typeof value === 'object') {
+                    const record = value as Record<string, unknown>;
+                    return (
+                        pickString(record['content']) ||
+                        pickString(record['text']) ||
+                        pickString(record['message']) ||
+                        pickString(record['delta']) ||
+                        pickString(record['value'])
+                    );
+                }
+                return '';
+            };
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                let boundary = buffer.indexOf('\n\n');
+
+                while (boundary !== -1) {
+                    const rawEvent = buffer.slice(0, boundary);
+                    buffer = buffer.slice(boundary + 2);
+                    boundary = buffer.indexOf('\n\n');
+
+                    const lines = rawEvent.split('\n');
+                    let eventType = 'message';
+                    let dataPayload = '';
+
+                    lines.forEach((line) => {
+                        if (line.startsWith('event:')) {
+                            eventType = line.slice('event:'.length).trim();
+                        } else if (line.startsWith('data:')) {
+                            dataPayload += `${line.slice('data:'.length).trim()}`;
+                        }
+                    });
+
+                    if (!dataPayload) {
+                        continue;
+                    }
+
+                    if (eventType === 'delta' || eventType === 'message') {
+                        try {
+                            const parsed = JSON.parse(dataPayload) as Record<string, unknown>;
+                            let chunk =
+                                pickString(parsed['content']) ||
+                                pickString(parsed['message']) ||
+                                pickString(parsed['text']);
+
+                            if (!chunk && Array.isArray(parsed['choices'])) {
+                                const firstChoice = parsed['choices'][0] as Record<string, unknown> | undefined;
+                                if (firstChoice) {
+                                    chunk = pickString(firstChoice['delta']) || pickString(firstChoice['message']);
+                                }
+                            }
+
+                            if (!chunk) {
+                                chunk = pickString(parsed);
+                            }
+
+                            if (chunk) {
+                                appendAssistantContent(chunk);
+                            }
+                        } catch (error) {
+                            console.warn('Failed to parse streaming chunk', error);
+                            appendAssistantContent(dataPayload);
+                        }
+                    } else if (eventType === 'complete' || eventType === 'done') {
+                        isComplete = true;
+                        break;
+                    } else if (eventType === 'error') {
+                        try {
+                            const parsed = JSON.parse(dataPayload) as { message?: string };
+                            assistantContent =
+                                parsed.message ??
+                                '申し訳ありません。AI応答のストリーミング中にエラーが発生しました。しばらくしてから再度お試しください。';
+                        } catch (error) {
+                            assistantContent =
+                                '申し訳ありません。AI応答のストリーミング中にエラーが発生しました。しばらくしてから再度お試しください。';
+                        }
+                        updateAssistantContent(assistantContent);
+                        isComplete = true;
+                        break;
+                    }
+                }
+
+                if (isComplete) {
+                    break;
+                }
+            }
+
+            if (!isComplete) {
+                updateAssistantContent(assistantContent);
+            }
         } catch (error) {
-            const mockResponse: Message = {
-                role: 'assistant',
-                content:
-                    'AIアシスタントへの接続に失敗しました。バックエンドAPIを設定してください。例：「プログラミングに興味がある場合、情報科学や工学部のコンピュータサイエンス学科がおすすめです。」',
-            };
-            setMessages((prev) => [...prev, mockResponse]);
+            if (error instanceof DOMException && error.name === 'AbortError') {
+                return;
+            }
+
+            try {
+                const fallbackResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: userMessage.content,
+                        history: messages,
+                    }),
+                });
+                if (fallbackResponse.ok) {
+                    const data = (await fallbackResponse.json()) as { message: string };
+                    setMessages((prev) => {
+                        const next = [...prev];
+                        if (assistantIndex < next.length) {
+                            next[assistantIndex] = { role: 'assistant', content: data.message };
+                        }
+                        return next;
+                    });
+                } else {
+                    throw new Error('Fallback chat request failed');
+                }
+            } catch (fallbackError) {
+                const fallbackMessage =
+                    'AIアシスタントへの接続に失敗しました。バックエンドAPIを設定してください。例：「プログラミングに興味がある場合、情報科学や工学部のコンピュータサイエンス学科がおすすめです。」';
+                setMessages((prev) => {
+                    const next = [...prev];
+                    if (assistantIndex < next.length) {
+                        next[assistantIndex] = { role: 'assistant', content: fallbackMessage };
+                    }
+                    return next;
+                });
+            }
         } finally {
             setIsLoading(false);
+            setActiveController(null);
         }
     }
 
@@ -82,6 +264,7 @@ export function ChatDrawer(): React.ReactElement {
     }
 
     function clearHistory(): void {
+        activeController?.abort();
         setMessages([]);
         if (typeof window !== 'undefined') {
             localStorage.removeItem('chatHistory');
@@ -116,29 +299,18 @@ export function ChatDrawer(): React.ReactElement {
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={clearHistory}
-                                aria-label="履歴をクリア"
-                            >
-                                <Trash2 className="size-4" aria-hidden="true" />
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setIsOpen(false)}
-                                aria-label="チャットを閉じる"
-                            >
-                                <X className="size-4" aria-hidden="true" />
-                            </Button>
-                        </div>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={clearHistory}
+                            aria-label="履歴をクリア"
+                        >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                        </Button>
                     </SheetHeader>
 
-                    <ScrollArea className="flex-1 px-5 py-4" aria-live="polite">
+                    <ScrollArea className="max-h-[calc(100vh-14rem)] flex-1 px-6" aria-live="polite">
                         <div className="space-y-3">
                             {messages.length === 0 ? (
                                 <div className="border-border/70 bg-muted/30 text-muted-foreground rounded-lg border border-dashed p-4 text-center text-sm">
@@ -161,7 +333,45 @@ export function ChatDrawer(): React.ReactElement {
                                                 : 'bg-accent text-foreground'
                                         }`}
                                     >
-                                        {message.content}
+                                        {message.role === 'assistant' ? (
+                                            <div className="max-w-full overflow-x-auto">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    className="prose prose-sm text-foreground prose-headings:mb-2 prose-headings:text-base prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-2"
+                                                    components={{
+                                                        table: ({ node, ...props }) => (
+                                                            <table
+                                                                className="border-border w-full border-collapse overflow-hidden rounded-lg border text-left"
+                                                                {...props}
+                                                            />
+                                                        ),
+                                                        thead: ({ node, ...props }) => (
+                                                            <thead className="bg-muted" {...props} />
+                                                        ),
+                                                        th: ({ node, ...props }) => (
+                                                            <th
+                                                                className="border-border border font-semibold"
+                                                                {...props}
+                                                            />
+                                                        ),
+                                                        td: ({ node, ...props }) => (
+                                                            <td className="border-border border align-top" {...props} />
+                                                        ),
+                                                        ul: ({ node, ...props }) => (
+                                                            <ul className="list-disc pl-5" {...props} />
+                                                        ),
+                                                        ol: ({ node, ...props }) => (
+                                                            <ol className="list-decimal pl-5" {...props} />
+                                                        ),
+                                                        li: ({ node, ...props }) => <li className="ms-0" {...props} />,
+                                                    }}
+                                                >
+                                                    {message.content}
+                                                </ReactMarkdown>
+                                            </div>
+                                        ) : (
+                                            message.content
+                                        )}
                                     </div>
                                 </div>
                             ))}

@@ -10,11 +10,11 @@ const NAVIGATION_LINKS = [
 
 const Header = (): React.ReactElement => {
     return (
-        <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <header className="border-border bg-background/90 sticky top-0 z-40 border-b backdrop-blur">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 text-lg font-semibold text-foreground transition hover:text-primary md:text-xl"
+                    className="text-foreground hover:text-primary flex items-center gap-2 text-lg font-semibold transition md:text-xl"
                     aria-label="UniNavi ホームに移動"
                 >
                     <span aria-hidden="true" className="text-primary text-2xl">

@@ -10,6 +10,7 @@ import logging
 import time
 import asyncio
 import contextlib
+from textwrap import dedent
 from typing import Awaitable, Callable, Dict, Any, AsyncIterator, List, Optional
 import httpx
 
@@ -36,6 +37,126 @@ SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 logger.info(f"Hugging Face Model ID: {HUGGINGFACE_MODEL_ID}")
 logger.info(f"Tavily API Key configured: {bool(TAVILY_API_KEY)}")
 logger.info(f"Serper API Key configured: {bool(SERPER_API_KEY)}")
+
+
+JSON_OUTPUT_EXAMPLE = dedent(
+    """
+    [
+      {
+        "id": "unique-id",
+        "name": "大学名",
+        "officialUrl": "公式サイトURL",
+        "faculty": "学部名",
+        "department": "学科名",
+        "deviationScore": "偏差値（例: 60-65）",
+        "commonTestScore": "共テ得点率（例: 75-80%）",
+        "examType": "入試形態",
+        "requiredSubjects": ["科目1", "科目2"],
+        "examDate": "試験日",
+        "examSchedules": ["願書受付: YYYY年MM月DD日", "試験日: YYYY年MM月DD日"],
+        "admissionMethods": ["一般選抜: 前期日程 2科目型", "共通テスト利用型: 英語重視"],
+        "subjectHighlights": ["数学: 200点（共通テスト換算）", "理科: 150点（化学/物理から選択)"],
+        "commonTestRatio": "共通テスト 60% / 個別試験 40%",
+        "selectionNotes": "指定校推薦枠あり。共テ利用型は英語外部試験得点換算可。",
+        "applicationDeadline": "2025年1月15日",
+        "aiSummary": "大学・学部の特徴や強みを100文字程度で具体的に要約（複数ソースからの要素を統合）",
+        "sources": ["出典URL1", "出典URL2"]
+      }
+    ]
+    """
+)
+
+
+def _to_string(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _ensure_list_of_strings(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [item for item in (_to_string(v) for v in value) if item]
+    string_value = _to_string(value)
+    if not string_value:
+        return []
+    # Allow comma or newline separated strings
+    separators = ["\n", ",", "・", "，", "、"]
+    for separator in separators:
+        if separator in string_value:
+            return [item.strip() for item in string_value.split(separator) if item.strip()]
+    return [string_value]
+
+
+def _format_url(url: str) -> str:
+    if not url:
+        return ""
+    cleaned = url.strip()
+    if not cleaned:
+        return ""
+    if cleaned.startswith("http://") or cleaned.startswith("https://"):
+        return cleaned
+    if cleaned.startswith("//"):
+        return f"https:{cleaned}"
+    if cleaned.startswith("www."):
+        return f"https://{cleaned}"
+    return f"https://{cleaned}"
+
+
+def _select_official_url(candidate: Any, sources: Any) -> str:
+    candidates: List[str] = []
+    candidate_str = _to_string(candidate)
+    if candidate_str:
+        candidates.append(candidate_str)
+
+    for source in _ensure_list_of_strings(sources):
+        candidates.append(source)
+
+    seen: set[str] = set()
+    prioritized: List[str] = []
+    for value in candidates:
+        formatted = _format_url(value)
+        if not formatted or formatted in seen:
+            continue
+        seen.add(formatted)
+        prioritized.append(formatted)
+
+    if not prioritized:
+        return ""
+
+    prioritized.sort(key=lambda url: (-100 if ".ac.jp" in url else -50 if "admissions" in url else -10 if url.startswith("https://www.") else 0))
+    return prioritized[0]
+
+
+def _normalize_university_entry(entry: dict) -> dict:
+    entry = dict(entry)
+    entry.setdefault("requiredSubjects", [])
+    entry.setdefault("sources", [])
+    entry.setdefault("examSchedules", [])
+    entry.setdefault("admissionMethods", [])
+    entry.setdefault("subjectHighlights", [])
+
+    entry["requiredSubjects"] = _ensure_list_of_strings(entry.get("requiredSubjects"))
+    entry["sources"] = _ensure_list_of_strings(entry.get("sources"))
+    entry["examSchedules"] = _ensure_list_of_strings(entry.get("examSchedules"))
+    entry["admissionMethods"] = _ensure_list_of_strings(entry.get("admissionMethods"))
+    entry["subjectHighlights"] = _ensure_list_of_strings(entry.get("subjectHighlights"))
+
+    entry["officialUrl"] = _select_official_url(entry.get("officialUrl"), entry.get("sources"))
+    entry["commonTestRatio"] = _to_string(entry.get("commonTestRatio"))
+    entry["selectionNotes"] = _to_string(entry.get("selectionNotes"))
+    entry["applicationDeadline"] = _to_string(entry.get("applicationDeadline"))
+    entry["examDate"] = _to_string(entry.get("examDate"))
+    entry["aiSummary"] = _to_string(entry.get("aiSummary"))
+    entry["faculty"] = _to_string(entry.get("faculty"))
+    entry["department"] = _to_string(entry.get("department"))
+    entry["examType"] = _to_string(entry.get("examType"))
+    entry["deviationScore"] = _to_string(entry.get("deviationScore"))
+    entry["commonTestScore"] = _to_string(entry.get("commonTestScore"))
+    entry["name"] = _to_string(entry.get("name"))
+
+    return entry
 
 
 # 🚨 【修正箇所】Hugging Face Chat Completions APIのクエリ関数
@@ -108,52 +229,86 @@ async def search_web(query: str) -> List[dict]:
     """
     logger.info(f"Searching web for query: {query}")
     
-    # Try Tavily first
-    if TAVILY_API_KEY:
+    async def _search_tavily() -> List[dict]:
+        if not TAVILY_API_KEY:
+            return []
         logger.debug("Attempting Tavily search...")
         try:
-            async with httpx.AsyncClient() as http_client:
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
                 response = await http_client.post(
                     "https://api.tavily.com/search",
                     json={"api_key": TAVILY_API_KEY, "query": query, "max_results": 10},
-                    timeout=30.0,
                 )
-                if response.status_code == 200:
-                    data = response.json()
-                    results = data.get("results", [])
-                    logger.info(f"Tavily search successful, found {len(results)} results")
-                    return results
-        except Exception as e:
-            logger.error(f"Tavily search failed: {e}")
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get("results", [])
+                logger.info(f"Tavily search successful, found {len(results)} results")
+                return results
+            logger.warning(f"Tavily search returned status {response.status_code}: {response.text}")
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Tavily search failed: {exc}")
+        return []
 
-    # Try Serper as fallback
-    if SERPER_API_KEY:
+    async def _search_serper() -> List[dict]:
+        if not SERPER_API_KEY:
+            return []
         logger.debug("Attempting Serper search...")
         try:
-            async with httpx.AsyncClient() as http_client:
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
                 response = await http_client.post(
                     "https://google.serper.dev/search",
                     json={"q": query, "num": 10},
                     headers={"X-API-KEY": SERPER_API_KEY},
-                    timeout=30.0,
                 )
-                if response.status_code == 200:
-                    data = response.json()
-                    organic = data.get("organic", [])
-                    logger.info(f"Serper search successful, found {len(organic)} results")
-                    return [
-                        {
-                            "title": item.get("title", ""),
-                            "url": item.get("link", ""),
-                            "content": item.get("snippet", ""),
-                        }
-                        for item in organic
-                    ]
-        except Exception as e:
-            logger.error(f"Serper search failed: {e}")
+            if response.status_code == 200:
+                data = response.json()
+                organic = data.get("organic", [])
+                logger.info(f"Serper search successful, found {len(organic)} results")
+                return [
+                    {
+                        "title": item.get("title", ""),
+                        "url": item.get("link", ""),
+                        "content": item.get("snippet", ""),
+                    }
+                    for item in organic
+                ]
+            logger.warning(f"Serper search returned status {response.status_code}: {response.text}")
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Serper search failed: {exc}")
+        return []
 
-    # Return empty list if both fail
-    logger.warning("Both Tavily and Serper searches failed, returning empty results")
+    tasks: List[tuple[str, asyncio.Task[List[dict]]]] = []
+    if TAVILY_API_KEY:
+        tasks.append(("tavily", asyncio.create_task(_search_tavily())))
+    if SERPER_API_KEY:
+        tasks.append(("serper", asyncio.create_task(_search_serper())))
+
+    if not tasks:
+        logger.warning("No search providers configured. Returning empty results.")
+        return []
+
+    results_by_priority: dict[str, List[dict]] = {label: [] for label, _ in tasks}
+    responses = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+    for (label, _), response in zip(tasks, responses, strict=True):
+        if isinstance(response, Exception):
+            logger.error(f"Search task '{label}' raised an exception: {response}")
+            continue
+        results_by_priority[label] = response
+
+    merged_results: List[dict] = []
+    seen_urls: set[str] = set()
+    for label in ("tavily", "serper"):
+        for item in results_by_priority.get(label, []):
+            url = item.get("url") or item.get("link") or ""
+            if url and url not in seen_urls:
+                merged_results.append(item)
+                seen_urls.add(url)
+
+    if merged_results:
+        logger.info(f"Search aggregation complete. Returning {len(merged_results)} merged results")
+        return merged_results
+
+    logger.warning("All search providers returned empty results")
     return []
 
 
@@ -195,27 +350,20 @@ async def summarize_with_ai(search_results: List[dict], query: str):
 方針:
 - 同一大学でも「学部が異なる」または「入試形態が異なる」場合は、別の要素として出力してください（学部バリエーション/方式バリエーションを可視化）。
 - 情報源は PassNavi（passnavi.obunsha.co.jp）と Kei-Net（keinet.ne.jp）を優先し、可能であれば sources にそれらのURLを1つ以上含めてください。
-- 公式サイト（*.ac.jp）の入試情報/要項/admissionsページも信頼できます。
+- 公式サイト（*.ac.jp）の入試情報/要項/admissionsページも信頼できます。sources には必ず公式サイトURLを1件含めてください。
 - 不明な項目は空文字列や空配列のままにしてください（推測禁止）。
 - "aiSummary" には、複数の情報源から得られた具体的な事実を最低でも2つ含めてください。（例: 学部の特色 + 入試方式/配点 + キャンパスの特徴）。単なる繰り返しや曖昧な表現は避け、実際の検索結果から得られた内容を簡潔に統合してください。
+- "examSchedules" には「願書受付」「出願締切」「試験日」「合格発表」などの日程を時系列で列挙してください。
+- "admissionMethods" には "一般選抜" や "総合型選抜" などの方式名を列挙し、必要であれば配点や特徴を併記してください。
+- "subjectHighlights" には各科目の配点比率や必須/選択区分などの入試に特化した情報を列挙してください。
+- "commonTestRatio" が判明している場合は百分率や「○割」といった形式で記載してください。
+- "selectionNotes" には特記事項（再受験可否、面接の有無、出願条件など）を記載してください。
+- "applicationDeadline" には願書提出の締切日を記載してください。
 
-以下のJSON形式で、見つかった大学情報を配列で返してください（最大12件）。異なる大学を優先しつつ、同一大学内の学部/入試形態のバリエーションも含め、重複は避けてください:
-[
-  {{
-    "id": "unique-id",
-    "name": "大学名",
-    "officialUrl": "公式サイトURL",
-    "faculty": "学部名",
-    "department": "学科名",
-    "deviationScore": "偏差値（例: 60-65）",
-    "commonTestScore": "共テ得点率（例: 75-80%）",
-    "examType": "入試形態",
-    "requiredSubjects": ["科目1", "科目2"],
-    "examDate": "試験日",
-    "aiSummary": "大学・学部の特徴や強みを100文字程度で具体的に要約（複数ソースからの要素を統合）",
-    "sources": ["出典URL1", "出典URL2"]
-  }}
-]"""
+以下のJSON形式で、見つかった大学情報を配列で返してください（最大12件）。異なる大学を優先しつつ、同一大学内の学部/入試形態のバリエーションも含め、重複は避けてください。
+
+{JSON_OUTPUT_EXAMPLE}
+"""
 
     # Hugging FaceのChat Completions APIに渡すメッセージ形式
     messages = [
@@ -297,6 +445,17 @@ def generate_mock_universities() -> List[dict]:
             "examType": "一般選抜",
             "requiredSubjects": ["数学", "理科", "英語"],
             "examDate": "2025年2月25日",
+            "examSchedules": [
+                "願書受付: 2024年12月1日",
+                "出願締切: 2025年1月15日",
+                "試験日: 2025年2月25日",
+                "合格発表: 2025年3月10日",
+            ],
+            "admissionMethods": ["一般選抜: 前期日程 3教科型", "共通テスト利用型: 数学・英語重視"],
+            "subjectHighlights": ["数学: 200点", "理科: 150点 (物理/化学)", "英語: 150点"],
+            "commonTestRatio": "共通テスト60% / 個別試験40%",
+            "selectionNotes": "共通テスト利用型は英語外部検定を換算可",
+            "applicationDeadline": "2025年1月15日",
             "aiSummary": "日本最高峰の研究環境。世界的な研究者が多数在籍し、最先端の教育を受けられる。",
             "sources": ["https://www.u-tokyo.ac.jp/"]
         },
@@ -311,6 +470,16 @@ def generate_mock_universities() -> List[dict]:
             "examType": "一般選抜",
             "requiredSubjects": ["数学", "理科", "英語"],
             "examDate": "2025年2月25日",
+            "examSchedules": [
+                "願書受付: 2024年12月10日",
+                "出願締切: 2025年1月20日",
+                "試験日: 2025年2月25日",
+            ],
+            "admissionMethods": ["一般選抜: 前期日程", "共通テスト利用型: 5教科7科目"],
+            "subjectHighlights": ["数学: 200点", "理科: 200点", "英語: 150点"],
+            "commonTestRatio": "共通テスト70% / 個別試験30%",
+            "selectionNotes": "第二段階選抜で面接あり",
+            "applicationDeadline": "2025年1月20日",
             "aiSummary": "自由な学風と高い研究力。ノーベル賞受賞者も多数輩出している名門大学。",
             "sources": ["https://www.kyoto-u.ac.jp/"]
         },
@@ -325,6 +494,16 @@ def generate_mock_universities() -> List[dict]:
             "examType": "一般選抜",
             "requiredSubjects": ["数学", "理科", "英語"],
             "examDate": "2025年2月24日",
+            "examSchedules": [
+                "願書受付: 2024年12月5日",
+                "出願締切: 2025年1月18日",
+                "試験日: 2025年2月24日",
+            ],
+            "admissionMethods": ["一般選抜: 前期/後期", "共通テスト利用型: 5教科"],
+            "subjectHighlights": ["数学: 180点", "理科: 180点", "英語: 140点"],
+            "commonTestRatio": "共通テスト55% / 個別試験45%",
+            "selectionNotes": "共通テスト利用型は出願資格に外部英語試験不要",
+            "applicationDeadline": "2025年1月18日",
             "aiSummary": "情報科学分野で国内有数の研究環境と企業連携を有する。",
             "sources": ["https://www.osaka-u.ac.jp/"]
         },
@@ -339,6 +518,16 @@ def generate_mock_universities() -> List[dict]:
             "examType": "一般選抜",
             "requiredSubjects": ["数学", "理科", "英語"],
             "examDate": "2025年2月26日",
+            "examSchedules": [
+                "願書受付: 2024年12月8日",
+                "出願締切: 2025年1月21日",
+                "試験日: 2025年2月26日",
+            ],
+            "admissionMethods": ["一般選抜: 前期", "AO入試: 総合型選抜"],
+            "subjectHighlights": ["数学: 150点", "理科: 150点", "英語: 120点"],
+            "commonTestRatio": "共通テスト50% / 個別試験50%",
+            "selectionNotes": "AO入試は志望理由書提出が必要",
+            "applicationDeadline": "2025年1月21日",
             "aiSummary": "実学重視の研究で評価が高い。AI・ロボティクス分野も充実。",
             "sources": ["https://www.tohoku.ac.jp/"]
         },
@@ -353,6 +542,16 @@ def generate_mock_universities() -> List[dict]:
             "examType": "一般選抜",
             "requiredSubjects": ["数学", "理科", "英語"],
             "examDate": "2025年2月20日",
+            "examSchedules": [
+                "願書受付: 2024年12月15日",
+                "出願締切: 2025年1月25日",
+                "試験日: 2025年2月20日",
+            ],
+            "admissionMethods": ["一般選抜: 3教科型", "共通テスト利用型: ボーダーフリー"] ,
+            "subjectHighlights": ["数学: 150点", "英語: 150点", "理科: 150点"],
+            "commonTestRatio": "共通テスト40% / 個別試験60%",
+            "selectionNotes": "共通テスト利用型はボーダーフリー方式あり",
+            "applicationDeadline": "2025年1月25日",
             "aiSummary": "私学トップクラスの理工系。幅広い分野と国際連携が魅力。",
             "sources": ["https://www.waseda.jp/"]
         },
@@ -367,6 +566,16 @@ def generate_mock_universities() -> List[dict]:
             "examType": "一般選抜",
             "requiredSubjects": ["数学", "理科", "英語"],
             "examDate": "2025年2月18日",
+            "examSchedules": [
+                "願書受付: 2024年12月12日",
+                "出願締切: 2025年1月22日",
+                "試験日: 2025年2月18日",
+            ],
+            "admissionMethods": ["一般選抜: 前期・後期", "共通テスト利用型: 高得点科目重視"],
+            "subjectHighlights": ["数学: 180点", "英語: 180点", "理科: 140点"],
+            "commonTestRatio": "共通テスト50% / 個別試験50%",
+            "selectionNotes": "指定校推薦枠多数。共テ利用型は英語外部試験加点あり",
+            "applicationDeadline": "2025年1月22日",
             "aiSummary": "産業界との結びつきが強く実践的。研究環境と就職に強み。",
             "sources": ["https://www.keio.ac.jp/"]
         },
@@ -494,17 +703,26 @@ async def search_universities(
     aggregated_results: List[dict] = []
     seen_urls = set()
 
-    for index, q in enumerate(queries, start=1):
+    async def _run_single_query(idx: int, q: str) -> None:
         try:
-            await _emit_progress("searching", {"current": index, "total": len(queries), "query": q})
+            await _emit_progress("searching", {"current": idx, "total": len(queries), "query": q})
             results = await search_web(q)
             for item in results:
                 url = item.get("url") or item.get("link") or ""
                 if url and url not in seen_urls:
                     aggregated_results.append(item)
                     seen_urls.add(url)
-        except Exception as e:
-            logger.warning(f"Search failed for query '{q}': {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Search failed for query '{q}': {exc}")
+
+    # Execute queries with controlled concurrency to improve throughput
+    semaphore = asyncio.Semaphore(5)
+
+    async def _bounded_query(idx: int, q: str) -> None:
+        async with semaphore:
+            await _run_single_query(idx, q)
+
+    await asyncio.gather(*(_bounded_query(index, q) for index, q in enumerate(queries, start=1)))
 
     await _emit_progress("search_complete", {"results": len(aggregated_results)})
 
@@ -525,7 +743,12 @@ async def search_universities(
 
     # Summarize with AI
     await _emit_progress("summarizing", {"sources": len(search_results)})
-    universities = await summarize_with_ai(search_results, " | ".join(queries))
+    raw_universities = await summarize_with_ai(search_results, " | ".join(queries))
+    universities = [_normalize_university_entry(uni) for uni in raw_universities]
+    for uni in universities:
+        official = uni.get("officialUrl")
+        if official and official not in uni["sources"]:
+            uni["sources"].insert(0, official)
     await _emit_progress("summarize_complete", {"count": len(universities)})
 
     # Deduplicate by (name, faculty, examType) keeping entries with preferred sources

@@ -21,6 +21,12 @@ export interface University {
     examDate: string;
     aiSummary: string;
     sources: string[];
+    examSchedules?: string[];
+    admissionMethods?: string[];
+    subjectHighlights?: string[];
+    commonTestRatio?: string;
+    selectionNotes?: string;
+    applicationDeadline?: string;
 }
 
 interface UniversityCardProps {
@@ -45,18 +51,24 @@ export function UniversityCard({ university, favorite = false, onToggleFavorite 
             <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                 <div className="space-y-1">
                     <CardTitle className="text-xl leading-tight font-semibold">
-                        <Link
-                            href={university.officialUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-foreground hover:text-primary flex items-center gap-2 transition"
-                        >
-                            <span className="truncate" title={university.name}>
+                        {university.officialUrl ? (
+                            <Link
+                                href={university.officialUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-foreground hover:text-primary flex items-center gap-2 transition"
+                            >
+                                <span className="truncate" title={university.name}>
+                                    {university.name}
+                                </span>
+                                <ExternalLink className="size-4" aria-hidden="true" />
+                                <span className="sr-only">公式サイトを新しいタブで開く</span>
+                            </Link>
+                        ) : (
+                            <span className="text-foreground flex items-center gap-2" title={university.name}>
                                 {university.name}
                             </span>
-                            <ExternalLink className="size-4" aria-hidden="true" />
-                            <span className="sr-only">公式サイトを新しいタブで開く</span>
-                        </Link>
+                        )}
                     </CardTitle>
                     <p className="text-muted-foreground text-sm">
                         {university.faculty}
@@ -108,11 +120,63 @@ export function UniversityCard({ university, favorite = false, onToggleFavorite 
                     </div>
                 ) : null}
 
-                {university.examDate ? (
-                    <p className="text-muted-foreground text-sm">
-                        <span className="text-foreground font-semibold">試験日:</span> {university.examDate}
-                    </p>
-                ) : null}
+                <div className="text-muted-foreground space-y-1 text-sm">
+                    {university.examDate ? (
+                        <p>
+                            <span className="text-foreground font-semibold">試験日:</span> {university.examDate}
+                        </p>
+                    ) : null}
+                    {university.applicationDeadline ? (
+                        <p>
+                            <span className="text-foreground font-semibold">出願締切:</span>{' '}
+                            {university.applicationDeadline}
+                        </p>
+                    ) : null}
+                    {university.commonTestRatio ? (
+                        <p>
+                            <span className="text-foreground font-semibold">共テ比率:</span>{' '}
+                            {university.commonTestRatio}
+                        </p>
+                    ) : null}
+                    {university.selectionNotes ? (
+                        <p>
+                            <span className="text-foreground font-semibold">特記事項:</span> {university.selectionNotes}
+                        </p>
+                    ) : null}
+                </div>
+
+                {(university.examSchedules?.length ?? 0) > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-foreground/80 text-sm font-medium">入試スケジュール</p>
+                        <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
+                            {university.examSchedules!.map((item) => (
+                                <li key={item}>{item}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {(university.admissionMethods?.length ?? 0) > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-foreground/80 text-sm font-medium">入試方式</p>
+                        <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
+                            {university.admissionMethods!.map((item) => (
+                                <li key={item}>{item}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {(university.subjectHighlights?.length ?? 0) > 0 && (
+                    <div className="space-y-2">
+                        <p className="text-foreground/80 text-sm font-medium">科目・配点のポイント</p>
+                        <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
+                            {university.subjectHighlights!.map((item) => (
+                                <li key={item}>{item}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 <Separator />
 

@@ -5,7 +5,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 
 import { ChatDrawer } from '@/components/layout/ChatDrawer';
 import { SearchFilters, SearchForm } from '@/components/layout/SearchForm';
-import { University, UniversityCard } from '@/components/layout/UniversityCard';
+import { type University, UniversityCard } from '@/components/layout/UniversityCard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,6 +39,12 @@ const MOCK_UNIVERSITIES: ReadonlyArray<University> = [
         examDate: '2025年2月25日',
         aiSummary: '情報工学分野で日本トップクラスの研究環境を誇る。AI・機械学習の研究が盛んで、産学連携も充実。',
         sources: ['https://www.titech.ac.jp/', 'https://admissions.titech.ac.jp/'],
+        examSchedules: ['願書受付: 2024年12月1日', '出願締切: 2025年1月15日', '試験日: 2025年2月25日'],
+        admissionMethods: ['一般選抜: 前期日程 3教科型', '共通テスト利用型: 数学・英語重視'],
+        subjectHighlights: ['数学: 200点', '理科: 150点', '英語: 150点'],
+        commonTestRatio: '共通テスト60% / 個別試験40%',
+        selectionNotes: '共通テスト利用型は英語外部検定換算可',
+        applicationDeadline: '2025年1月15日',
     },
     {
         id: '2',
@@ -53,6 +59,12 @@ const MOCK_UNIVERSITIES: ReadonlyArray<University> = [
         examDate: '2025年2月20日',
         aiSummary: '伝統ある私立大学の理工学部。幅広い分野の研究が可能で、就職実績も良好。国際交流プログラムも充実。',
         sources: ['https://www.waseda.jp/'],
+        examSchedules: ['願書受付: 2024年12月15日', '出願締切: 2025年1月25日', '試験日: 2025年2月20日'],
+        admissionMethods: ['一般選抜: 3教科型', '共通テスト利用型: ボーダーフリー方式'],
+        subjectHighlights: ['数学: 150点', '英語: 150点', '理科: 150点'],
+        commonTestRatio: '共通テスト40% / 個別試験60%',
+        selectionNotes: '共通テスト利用型はボーダーフリー方式あり',
+        applicationDeadline: '2025年1月25日',
     },
     {
         id: '3',
@@ -67,6 +79,12 @@ const MOCK_UNIVERSITIES: ReadonlyArray<University> = [
         examDate: '2025年2月18日',
         aiSummary: '総合力の高い理工学部。産業界とのつながりが強く、実践的な教育が特徴。キャンパス環境も優れている。',
         sources: ['https://www.keio.ac.jp/'],
+        examSchedules: ['願書受付: 2024年12月12日', '出願締切: 2025年1月22日', '試験日: 2025年2月18日'],
+        admissionMethods: ['一般選抜: 前期・後期', '共通テスト利用型: 高得点科目重視'],
+        subjectHighlights: ['数学: 180点', '英語: 180点', '理科: 140点'],
+        commonTestRatio: '共通テスト50% / 個別試験50%',
+        selectionNotes: '共通テスト利用型は英語外部試験加点あり',
+        applicationDeadline: '2025年1月22日',
     },
 ];
 
@@ -219,7 +237,7 @@ function FavoriteSummaryTable({ summary, total }: FavoriteSummaryTableProps): Re
                 <TableBody>
                     {summary.map(([examType, count]) => (
                         <TableRow key={examType}>
-                            <TableCell className="text-sm text-foreground">{examType}</TableCell>
+                            <TableCell className="text-foreground text-sm">{examType}</TableCell>
                             <TableCell className="text-right">
                                 <Badge variant="outline">{count} 件</Badge>
                             </TableCell>
@@ -264,7 +282,9 @@ function SearchStatusSection({
                             <p className="text-primary/80 text-sm font-medium">検索ステータス</p>
                             <h2 className="text-foreground text-xl font-semibold">進捗状況</h2>
                         </div>
-                        {isLoading ? <Loader2 className="text-primary h-5 w-5 animate-spin" aria-hidden="true" /> : null}
+                        {isLoading ? (
+                            <Loader2 className="text-primary h-5 w-5 animate-spin" aria-hidden="true" />
+                        ) : null}
                     </div>
                     <div className="space-y-2" aria-live="polite">
                         <Progress value={progressValue} aria-label="検索進捗" />
@@ -329,36 +349,36 @@ function ProgressInsightTable({
                 </TableHeader>
                 <TableBody>
                     <TableRow>
-                        <TableCell className="text-sm font-medium text-foreground">ステージ</TableCell>
+                        <TableCell className="text-foreground text-sm font-medium">ステージ</TableCell>
                         <TableCell>
                             <Badge variant="secondary">{stageLabel}</Badge>
                         </TableCell>
                     </TableRow>
                     <TableRow>
-                        <TableCell className="text-sm font-medium text-foreground">最新メッセージ</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{message}</TableCell>
+                        <TableCell className="text-foreground text-sm font-medium">最新メッセージ</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{message}</TableCell>
                     </TableRow>
                     <TableRow>
-                        <TableCell className="text-sm font-medium text-foreground">取得済み件数</TableCell>
+                        <TableCell className="text-foreground text-sm font-medium">取得済み件数</TableCell>
                         <TableCell>
                             <Badge variant="outline">{universitiesCount} 件</Badge>
                         </TableCell>
                     </TableRow>
                     <TableRow>
-                        <TableCell className="text-sm font-medium text-foreground">推定件数</TableCell>
+                        <TableCell className="text-foreground text-sm font-medium">推定件数</TableCell>
                         <TableCell>
                             <Badge variant="outline">{expectedResults ?? '算出中'}</Badge>
                         </TableCell>
                     </TableRow>
                     <TableRow>
-                        <TableCell className="text-sm font-medium text-foreground">進捗率</TableCell>
+                        <TableCell className="text-foreground text-sm font-medium">進捗率</TableCell>
                         <TableCell>
                             <Badge variant="default">{roundedProgress}%</Badge>
                         </TableCell>
                     </TableRow>
                     {processedLabel ? (
                         <TableRow>
-                            <TableCell className="text-sm font-medium text-foreground">処理済/対象</TableCell>
+                            <TableCell className="text-foreground text-sm font-medium">処理済/対象</TableCell>
                             <TableCell>
                                 <Badge variant="secondary">{processedLabel}</Badge>
                             </TableCell>
@@ -370,7 +390,12 @@ function ProgressInsightTable({
     );
 }
 
-function ResultsSection({ universities, expectedResults, onToggleFavorite, isFavorite }: ResultsSectionProps): ReactElement | null {
+function ResultsSection({
+    universities,
+    expectedResults,
+    onToggleFavorite,
+    isFavorite,
+}: ResultsSectionProps): ReactElement | null {
     if (universities.length === 0) {
         return null;
     }
@@ -381,9 +406,7 @@ function ResultsSection({ universities, expectedResults, onToggleFavorite, isFav
                 <p className="text-primary/80 text-sm font-medium">検索結果</p>
                 <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="default">取得済 {universities.length} 件</Badge>
-                    {expectedResults !== null ? (
-                        <Badge variant="secondary">推定 {expectedResults} 件</Badge>
-                    ) : null}
+                    {expectedResults !== null ? <Badge variant="secondary">推定 {expectedResults} 件</Badge> : null}
                 </div>
                 <p className="text-muted-foreground text-sm">
                     各カードから詳細ページや参考リンクにアクセスして最新情報を確認しましょう。
@@ -515,7 +538,7 @@ export function HomeClient(): React.ReactElement {
                 case 'completed':
                     return {
                         stage,
-                        message: `検索が完了しました。${payload.count ?? 0} 件の大学が見つかりました。`,
+                        message: `検索が完了しました。`,
                     };
                 default:
                     return {

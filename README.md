@@ -1,85 +1,125 @@
-# Uvinavi Next.js Starter
+# UniNavi – AI大学ナビゲーションプラットフォーム
 
-Production-ready Next.js 16 template pairing React 19, Tailwind CSS v4, and Shadcn UI components. Use this repository as a baseline for dashboards or SaaS products with opinionated linting, formatting, and type-safety defaults.
+UniNavi は Next.js 16 + React 19 を基盤に、学生が進学先を検索・比較できる AI サポート型の大学ナビゲーションツールです。Tailwind CSS v4 と shadcn/ui を活用したモダンな UI/UX に加え、バックエンドの FastAPI と Hugging Face / Tavily / Serper API を組み合わせることで、最新の入試情報と AI チャット機能を提供します。
 
-## ✨ Features
+## ✨ 主な特徴
 
-- **Modern stack** – Next.js App Router, server components, and React 19 streaming support.
-- **UI primitives** – Shadcn UI components backed by Radix primitives and Lucide icons.
-- **DX guardrails** – ESLint (Core Web Vitals), Prettier + Tailwind plugin, and TypeScript strict mode.
-- **Responsive layout** – Ready-made marketing page sections showcasing how to compose components.
-- **Consistent tooling** – Single-command scripts for linting, formatting, and type checking.
+- **ストリーミング AI チャット**: Hugging Face Chat Completions API を用いたストリーミング応答。Markdown（表・箇条書きなど）に対応し、進路相談をリアルタイムでサポート。
+- **大学検索の自動要約**: Tavily / Serper API で取得した検索結果を AI が集約し、偏差値・共テ得点率・入試方式・必要科目などを構造化してカード表示。
+- **詳細な入試情報**: 試験日、出願締切、入試スケジュール、共テ配点比率、特記事項、入試方式、科目別配点など受験生が必要とする情報を網羅。
+- **公式サイトリンクの補正**: `.ac.jp` ドメインや admissions ページを優先的に抽出し、参照元リンクとともに信頼性を担保。
+- **お気に入り機能**: 気になる大学を保存し、入試形態ごとの内訳や比較表示が可能。
+- **フロントエンド/バックエンド分離構成**: Next.js (フロント) と FastAPI (バック) を分離し、拡張性とテスト容易性を確保。
 
-## 🚀 Getting Started
+## 🚀 セットアップ
 
-### Prerequisites
+### 前提条件
 
-- Node.js 18.18+ or 20+
-- Package manager of your choice (examples use `bun`)
+- Node.js 18.18+ または 20+
+- Python 3.11+
+- `bun`（推奨）または任意のパッケージマネージャ
+- 取得必須の API キー
+    - `HF_API_KEY` (Hugging Face)
+    - `HF_MODEL_ID` (任意、既定値は `MiniMaxAI/MiniMax-M2:novita`)
+    - `TAVILY_API_KEY` または `SERPER_API_KEY`
 
-### Installation
+### フロントエンド
 
 ```bash
-git clone https://github.com/YuuOhnuki/nextjs-startar
-cd nextjs-startar
+cd uninavi
 bun install
 bun dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to see the starter interface.
+### バックエンド
 
-## 📦 Available Scripts
+```bash
+cd backend
+python -m venv .venv
+. .venv/Scripts/activate  # Windows PowerShell の場合
+pip install -r requirements.txt
+python main.py
+```
 
-| Command                | Description                                             |
-| ---------------------- | ------------------------------------------------------- |
-| `bun dev`              | Run the Next.js development server.                     |
-| `bun run build`        | Create an optimized production build.                   |
-| `bun run start`        | Serve the production build locally.                     |
-| `bun run lint`         | Lint all files with ESLint (fails on warnings).         |
-| `bun run lint:fix`     | Automatically fix lint issues where possible.           |
-| `bun run format`       | Format the codebase with Prettier and Tailwind sorting. |
-| `bun run format:check` | Verify formatting without writing changes.              |
-| `bun run typecheck`    | Run TypeScript checks in `--noEmit` mode.               |
+バックエンドは `http://localhost:8000` で FastAPI が起動し、フロントエンドから `NEXT_PUBLIC_API_URL` 経由でアクセスされます。
 
-## 🧱 Project Structure
+## 📦 利用可能なスクリプト（フロントエンド）
+
+| Command                | Description                                       |
+| ---------------------- | ------------------------------------------------- |
+| `bun dev`              | Next.js 開発サーバを起動します。                  |
+| `bun run build`        | 最適化された本番ビルドを生成します。              |
+| `bun run start`        | 本番ビルドをローカルで提供します。                |
+| `bun run lint`         | ESLint（警告も失敗扱い）を実行します。            |
+| `bun run lint:fix`     | ESLint の自動修正を試みます。                     |
+| `bun run format`       | Prettier + Tailwind で整形します。                |
+| `bun run format:check` | 整形の差分のみを確認します。                      |
+| `bun run typecheck`    | TypeScript 型チェックを `--noEmit` で実行します。 |
+
+バックエンドのローカル開発では `python main.py` で ASGI サーバ（Uvicorn）が立ち上がります。
+
+## 🧱 プロジェクト構成（抜粋）
 
 ```
-src/
-├─ app/
-│  ├─ layout.tsx         # Global layout, fonts, and navigation
-│  └─ page.tsx           # Marketing-style landing sections
+uninavi/
+├─ app/                  # Next.js App Router ページとレイアウト
 ├─ components/
-│  ├─ index.ts           # Barrel exports for layout/sections/UI
-│  ├─ layout/            # Layout-level components (site header)
-│  ├─ sections/          # Hero, features, stack, tooling sections
-│  └─ ui/                # Shadcn UI primitives
-├─ hooks/                # Custom React hooks (e.g., responsive helpers)
-├─ lib/                  # Utilities and shared helpers
-└─ styles/               # Tailwind & global styles (see `app/globals.css`)
+│  ├─ layout/            # レイアウト・カード・チャットなど主要UI
+│  └─ ui/                # shadcn/ui ベースの再利用コンポーネント
+├─ hooks/                # カスタムフック（お気に入り管理など）
+├─ backend/
+│  ├─ main.py            # FastAPI エントリーポイント
+│  └─ services/
+│     ├─ summarize.py    # Web検索 + AI要約パイプライン
+│     └─ ai_search.py    # ストリーミングチャット機能
+└─ README.md             # 本ドキュメント
 ```
 
-> Tailwind v4 configuration lives inside `app/globals.css` alongside theme tokens and variants.
+## 🧠 バックエンド API ハイライト
 
-## 🛠 Tooling & Configuration
+### `/api/chat/stream`
 
-- **ESLint** – Configured via `eslint.config.mjs` with strict Core Web Vitals and TypeScript rules.
-- **Prettier** – `.prettierrc.json` aligns formatting style (semicolons, single quotes, Tailwind sorting).
-- **Prettier ignore** – `.prettierignore` excludes build artifacts and dependencies.
-- **TypeScript** – `tsconfig.json` declares `@/*` path aliases and strict compiler settings.
-- **Tailwind CSS** – PostCSS plugin pipeline using `@tailwindcss/postcss` and `tw-animate-css` utilities.
+- Hugging Face Chat Completions API を利用し、進路相談チャットをストリーミングで返却。
+- SSE イベント (`delta`, `complete`, `error`) をフロントが逐次描画。
+- Markdown/GFM（表・箇条書き）に対応。
 
-## 🧩 UI Overview
+### `/api/search`
 
-- `components/layout/site-header.tsx` – Sticky header with navigation anchors and GitHub CTA.
-- `components/sections/*` – Modular sections reused in `app/page.tsx` to showcase template content.
-- `components/ui/*` – Auto-generated Shadcn UI primitives ready for composition across the app.
+- ユーザーのフィルタ条件から検索クエリを構築。Tavily / Serper を並列実行し、高速に結果取得。
+- AI が偏差値・共テ得点率・入試方式・必要科目・公式URL・入試日程などを JSON 構造化。
+- 公式サイト URL を補正し、信頼度に基づくソース優先度で重複排除。
 
-## ✅ Recommended Next Steps
+## 🖥 フロントエンド UI
 
-1. Replace placeholder copy (org name, GitHub URL) with your branding.
-2. Configure CI (GitHub Actions, Vercel, etc.) to run `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
-3. Extend `components/sections` with your product-specific content or convert sections into dynamic data-driven components.
+- **検索フォーム**: 偏差値帯、入試方式、共通テスト利用、学費などの高度なフィルタ。
+- **結果カード**: 入試スケジュール、入試方式、科目配点、共テ比率、特記事項、AI要約を表示。
+- **チャットドロワー**: ストリーミング応答、Markdown整形、履歴保存、ローディングアニメーション。
+- **お気に入り機能**: お気に入り内訳の集計テーブルとカード一覧。
 
-## 📄 License
+## ⚙️ 環境変数（一例）
 
-This template is MIT licensed. Feel free to fork and adapt for commercial or open-source projects.
+フロント (`.env.local`):
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+バックエンド (`backend/.env`):
+
+```env
+HF_API_KEY=your_huggingface_api_key
+HF_MODEL_ID=MiniMaxAI/MiniMax-M2:novita
+TAVILY_API_KEY=your_tavily_api_key
+# または
+SERPER_API_KEY=your_serper_api_key
+```
+
+## ✅ テストの進め方
+
+- フロント: `bun run lint`, `bun run typecheck`, `bun run test`（任意）を CI に統合。
+- バック: FastAPI エンドポイントに対する pytest / httpx ベースの統合テストを推奨。
+- Lint/Formatting: ESLint + Prettier + Tailwind プラグインで一貫性を担保。
+
+## 📄 ライセンス
+
+本プロジェクトは MIT License で公開されています。商用・OSS 問わずフォークしてご活用ください。

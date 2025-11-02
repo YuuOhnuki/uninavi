@@ -10,7 +10,7 @@ import json
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import os
 import logging
@@ -22,7 +22,7 @@ from dotenv import load_dotenv # 👈 追加
 load_dotenv() # 👈 追加: .envファイルから環境変数を読み込む
 
 # 🚨 【修正なし】インポートは前回の修正のまま（ファイル名がservices/ai_search.pyの場合）
-from services.ai_search import chat_with_ai 
+from services.ai_search import chat_with_ai, chat_with_ai_stream 
 from services.summarize import search_universities
 
 # Configure logging
@@ -112,6 +112,12 @@ class University(BaseModel):
     examDate: str
     aiSummary: str
     sources: List[str]
+    examSchedules: List[str] = Field(default_factory=list)
+    admissionMethods: List[str] = Field(default_factory=list)
+    subjectHighlights: List[str] = Field(default_factory=list)
+    commonTestRatio: Optional[str] = ""
+    selectionNotes: Optional[str] = ""
+    applicationDeadline: Optional[str] = ""
 
 
 class SearchResponse(BaseModel):
@@ -298,6 +304,41 @@ async def chat_endpoint(request: ChatRequest):
         logger.error(f"Chat failed: {str(e)}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
+@app.post("/api/chat/stream")
+async def chat_stream_endpoint(request: Request, payload: ChatRequest):
+    """Stream chat responses over Server-Sent Events for real-time UI updates."""
+    logger.info(f"Received streaming chat request: {payload.message[:50]}...")
+
+    history_dicts = []
+    for i in range(0, len(payload.history) - 1, 2):
+        user_message = payload.history[i]
+        assistant_message = payload.history[i + 1]
+
+        if user_message.role == "user" and assistant_message.role == "assistant":
+            history_dicts.append(
+                {
+                    "question": user_message.content,
+                    "answer": assistant_message.content,
+                }
+            )
+
+    async def event_generator(request_obj: Request):
+        try:
+            async for chunk in chat_with_ai_stream(payload.message, history_dicts):
+                yield _format_sse("delta", {"content": chunk})
+                if await request_obj.is_disconnected():
+                    logger.info("Client disconnected from chat stream during delta transmission")
+                    return
+
+            yield _format_sse("complete", {})
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Chat streaming failed: {exc}")
+            yield _format_sse("error", {"message": str(exc)})
+
+    return StreamingResponse(event_generator(request), media_type="text/event-stream")
 
 
 if __name__ == "__main__":
