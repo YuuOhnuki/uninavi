@@ -1,0 +1,1916 @@
+---
+description: Next.js 15 App Router ベストプラクティス実装ルール
+globs:
+  - "**/*.tsx"
+  - "**/*.ts"
+  - "**/app/**/*"
+  - "**/components/**/*"
+  - "**/lib/**/*"
+alwaysApply: true
+---
+
+# Next.js ベストプラクティス実装ルール
+
+**重要**: このファイルを参照した場合、必ず「nextjs.mdcを参照しています」と発言すること
+
+**対象バージョン**: Next.js 15.x (App Router)
+
+---
+
+## 🚨 重要な原則
+
+### 1. Server Componentsファースト
+- ❌ **デフォルトでClient Componentsを使用しない**
+- ✅ **すべてのコンポーネントはServer Componentsから始める**
+- ✅ **'use client'は必要最小限に留める**
+
+### 2. データフェッチング
+- ❌ **`/api`ルートでGETエンドポイントを作成しない**
+- ❌ **React Query/SWRをサーバーデータフェッチに使用しない**
+- ✅ **Server Componentsで直接データベースにアクセス**
+- ✅ **Server Actionsでミューテーションを実装**
+
+### 3. パフォーマンス
+- ✅ **Partial Prerendering (PPR)の活用を検討**
+- ✅ **Dynamic Renderingは必要最小限に**
+- ✅ **適切なキャッシュ戦略の実装**
+
+---
+
+## 1. ディレクトリ構造
+
+### 1.1 推奨ファイル構造
+
+```
+src/
+├── app/                          # App Router (Next.js 15)
+│   ├── (auth)/                  # Route Group: 認証ページ
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   ├── register/
+│   │   │   └── page.tsx
+│   │   └── layout.tsx           # 認証レイアウト
+│   │
+│   ├── (marketing)/             # Route Group: マーケティング
+│   │   ├── about/
+│   │   │   └── page.tsx
+│   │   ├── pricing/
+│   │   │   └── page.tsx
+│   │   ├── contact/
+│   │   │   └── page.tsx
+│   │   └── layout.tsx
+│   │
+│   ├── (dashboard)/             # Route Group: ダッシュボード
+│   │   ├── projects/
+│   │   │   ├── page.tsx         # /dashboard/projects
+│   │   │   ├── [id]/
+│   │   │   │   ├── page.tsx     # /dashboard/projects/[id]
+│   │   │   │   ├── edit/
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── loading.tsx
+│   │   │   ├── loading.tsx
+│   │   │   └── error.tsx
+│   │   ├── settings/
+│   │   │   ├── page.tsx
+│   │   │   ├── profile/
+│   │   │   │   └── page.tsx
+│   │   │   └── billing/
+│   │   │       └── page.tsx
+│   │   └── layout.tsx
+│   │
+│   ├── api/                     # API Routes (ミューテーションのみ)
+│   │   ├── webhooks/
+│   │   │   └── route.ts
+│   │   └── upload/
+│   │       └── route.ts
+│   │
+│   ├── layout.tsx               # Root Layout
+│   ├── page.tsx                 # Home Page
+│   ├── loading.tsx              # Global Loading
+│   ├── error.tsx                # Global Error
+│   ├── not-found.tsx            # 404 Page
+│   └── global-error.tsx         # Global Error Boundary
+│
+├── components/                  # React Components
+│   ├── ui/                      # shadcn/ui components
+│   │   ├── button.tsx
+│   │   ├── card.tsx
+│   │   └── ...
+│   │
+│   ├── features/                # 機能別コンポーネント
+│   │   ├── auth/
+│   │   │   ├── login-form.tsx          # Client Component
+│   │   │   ├── auth-provider.tsx       # Client Component
+│   │   │   └── session-display.tsx     # Server Component
+│   │   ├── dashboard/
+│   │   │   ├── project-list.tsx        # Server Component
+│   │   │   ├── project-card.tsx        # Server Component
+│   │   │   └── project-actions.tsx     # Client Component
+│   │   └── marketing/
+│   │       ├── hero-section.tsx        # Server Component
+│   │       └── cta-button.tsx          # Client Component
+│   │
+│   ├── layouts/                 # Layout Components
+│   │   ├── header.tsx
+│   │   ├── footer.tsx
+│   │   └── sidebar.tsx
+│   │
+│   └── providers/               # Context Providers (Client)
+│       ├── theme-provider.tsx
+│       ├── toast-provider.tsx
+│       └── query-provider.tsx   # TanStack Queryなど
+│
+├── lib/                         # ユーティリティとヘルパー
+│   ├── actions/                 # Server Actions
+│   │   ├── auth.ts
+│   │   ├── projects.ts
+│   │   └── users.ts
+│   │
+│   ├── db/                      # データベース
+│   │   ├── prisma.ts           # Prisma Client
+│   │   ├── schema.prisma
+│   │   └── migrations/
+│   │
+│   ├── dal/                     # Data Access Layer
+│   │   ├── projects.ts
+│   │   ├── users.ts
+│   │   └── auth.ts
+│   │
+│   ├── validations/             # Zodスキーマ
+│   │   ├── auth.ts
+│   │   ├── project.ts
+│   │   └── user.ts
+│   │
+│   ├── utils/                   # ヘルパー関数
+│   │   ├── cn.ts               # classname utility
+│   │   ├── format.ts
+│   │   ├── date.ts
+│   │   └── api.ts
+│   │
+│   ├── constants/               # 定数
+│   │   ├── config.ts
+│   │   ├── routes.ts
+│   │   └── messages.ts
+│   │
+│   └── types/                   # 型定義
+│       ├── api.ts
+│       ├── database.ts
+│       └── common.ts
+│
+├── hooks/                       # Custom Hooks (Client)
+│   ├── use-user.ts
+│   ├── use-project.ts
+│   ├── use-toast.ts
+│   └── use-media-query.ts
+│
+├── middleware.ts                # Middleware
+├── .env                         # 環境変数
+├── .env.example
+├── next.config.mjs
+├── tailwind.config.ts
+└── tsconfig.json
+```
+
+### 1.2 命名規則
+
+| ファイルタイプ | 命名規則 | 例 |
+|---------------|----------|-----|
+| ページ | `page.tsx` | `app/about/page.tsx` |
+| レイアウト | `layout.tsx` | `app/layout.tsx` |
+| ローディング | `loading.tsx` | `app/loading.tsx` |
+| エラー | `error.tsx` | `app/error.tsx` |
+| Not Found | `not-found.tsx` | `app/not-found.tsx` |
+| Route Handler | `route.ts` | `app/api/users/route.ts` |
+| Middleware | `middleware.ts` | `middleware.ts` |
+| コンポーネント | `kebab-case.tsx` | `user-profile.tsx` |
+| Server Actions | `kebab-case.ts` | `create-project.ts` |
+
+---
+
+## 2. Server Components vs Client Components
+
+### 2.1 Server Components（デフォルト）
+
+**✅ 使用すべきケース**:
+- データフェッチングが必要
+- データベースに直接アクセス
+- 機密情報（APIキー、トークン）を扱う
+- 大きな依存関係をサーバーに保持
+- SEOが重要
+
+```typescript
+// ✅ Server Component（デフォルト）
+// app/projects/page.tsx
+import { getProjects } from "@/lib/dal/projects";
+import { ProjectCard } from "@/components/features/dashboard/project-card";
+
+export default async function ProjectsPage() {
+  // サーバーサイドで直接データフェッチ
+  const projects = await getProjects();
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {projects.map((project) => (
+        <ProjectCard key={project.id} project={project} />
+      ))}
+    </div>
+  );
+}
+```
+
+### 2.2 Client Components
+
+**✅ 使用すべきケース**:
+- イベントリスナー（onClick, onChange, etc.）
+- React Hooks（useState, useEffect, etc.）
+- ブラウザAPI（localStorage, window, etc.）
+- インタラクティブな機能
+- カスタムフック
+
+**⚠️ 注意事項**:
+- 'use client'は可能な限り下位のコンポーネントに配置
+- Server Componentsを子として渡すことで最適化
+
+```typescript
+// ✅ Client Component（必要最小限）
+// components/features/dashboard/project-actions.tsx
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { deleteProject } from "@/lib/actions/projects";
+import { useToast } from "@/hooks/use-toast";
+
+interface ProjectActionsProps {
+  projectId: string;
+}
+
+export function ProjectActions({ projectId }: ProjectActionsProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+
+  async function handleDelete() {
+    setIsLoading(true);
+    try {
+      await deleteProject(projectId);
+      toast({ title: "プロジェクトを削除しました" });
+    } catch (error) {
+      toast({
+        title: "エラーが発生しました",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <Button
+      variant="destructive"
+      onClick={handleDelete}
+      disabled={isLoading}
+    >
+      {isLoading ? "削除中..." : "削除"}
+    </Button>
+  );
+}
+```
+
+### 2.3 コンポーネント合成パターン
+
+```typescript
+// ✅ 推奨: Server ComponentにClient Componentを組み込む
+// app/projects/[id]/page.tsx (Server Component)
+import { getProject } from "@/lib/dal/projects";
+import { ProjectActions } from "@/components/features/dashboard/project-actions"; // Client
+
+export default async function ProjectDetailPage({ 
+  params 
+}: { 
+  params: { id: string } 
+}) {
+  const project = await getProject(params.id);
+
+  return (
+    <div>
+      <h1>{project.name}</h1>
+      <p>{project.description}</p>
+      {/* Client Componentは必要な部分のみ */}
+      <ProjectActions projectId={project.id} />
+    </div>
+  );
+}
+```
+
+```typescript
+// ✅ Server Componentを子として渡す
+// components/layouts/sidebar.tsx (Client Component)
+"use client";
+
+import { useState } from "react";
+
+export function Sidebar({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <aside className={isOpen ? "open" : "closed"}>
+      <button onClick={() => setIsOpen(!isOpen)}>Toggle</button>
+      {/* childrenはServer Componentでも可 */}
+      {children}
+    </aside>
+  );
+}
+
+// app/dashboard/layout.tsx (Server Component)
+import { Sidebar } from "@/components/layouts/sidebar";
+import { NavigationMenu } from "@/components/layouts/navigation-menu"; // Server
+
+export default function DashboardLayout({ children }) {
+  return (
+    <Sidebar>
+      {/* Server Componentを子として渡す */}
+      <NavigationMenu />
+    </Sidebar>
+  );
+}
+```
+
+---
+
+## 3. データフェッチング
+
+### 3.1 Server Componentsでのデータフェッチ
+
+**原則**: APIルートを作らず、直接データベースにアクセス
+
+```typescript
+// ✅ 推奨: Server Componentで直接DBアクセス
+// lib/dal/projects.ts (Data Access Layer)
+import { prisma } from "@/lib/db/prisma";
+import { cache } from "react";
+import { auth } from "@/lib/auth";
+
+// React cacheでリクエスト単位のメモ化
+export const getProjects = cache(async () => {
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const projects = await prisma.project.findMany({
+    where: {
+      userId: session.user.id,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return projects;
+});
+
+// 個別取得もメモ化
+export const getProject = cache(async (id: string) => {
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: {
+      id,
+      userId: session.user.id,
+    },
+  });
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  return project;
+});
+```
+
+```typescript
+// ✅ ページコンポーネントで使用
+// app/projects/page.tsx
+import { getProjects } from "@/lib/dal/projects";
+import { Suspense } from "react";
+import { ProjectList } from "@/components/features/dashboard/project-list";
+import { ProjectListSkeleton } from "@/components/features/dashboard/project-list-skeleton";
+
+export default function ProjectsPage() {
+  return (
+    <div>
+      <h1>プロジェクト一覧</h1>
+      <Suspense fallback={<ProjectListSkeleton />}>
+        <ProjectListAsync />
+      </Suspense>
+    </div>
+  );
+}
+
+async function ProjectListAsync() {
+  const projects = await getProjects();
+  return <ProjectList projects={projects} />;
+}
+```
+
+### 3.2 並列データフェッチ
+
+```typescript
+// ✅ Promise.allで並列フェッチ
+// app/dashboard/page.tsx
+import { getProjects } from "@/lib/dal/projects";
+import { getUser } from "@/lib/dal/users";
+import { getStats } from "@/lib/dal/stats";
+
+export default async function DashboardPage() {
+  // 並列でデータフェッチ
+  const [projects, user, stats] = await Promise.all([
+    getProjects(),
+    getUser(),
+    getStats(),
+  ]);
+
+  return (
+    <div>
+      <UserProfile user={user} />
+      <StatsCards stats={stats} />
+      <ProjectList projects={projects} />
+    </div>
+  );
+}
+```
+
+### 3.3 Sequential vs Parallel フェッチ
+
+```typescript
+// ❌ 避けるべき: シーケンシャルフェッチ（遅い）
+async function BadExample() {
+  const user = await getUser();
+  const projects = await getProjects(user.id); // userの後に実行
+  const stats = await getStats(user.id);       // projectsの後に実行
+  // 合計時間 = t1 + t2 + t3
+}
+
+// ✅ 推奨: 並列フェッチ（速い）
+async function GoodExample() {
+  const userPromise = getUser();
+  const projectsPromise = getProjects();
+  const statsPromise = getStats();
+  
+  const [user, projects, stats] = await Promise.all([
+    userPromise,
+    projectsPromise,
+    statsPromise,
+  ]);
+  // 合計時間 = max(t1, t2, t3)
+}
+
+// ✅ 依存関係がある場合
+async function DependentExample() {
+  const user = await getUser();
+  
+  // userが取得できてから並列で他を取得
+  const [projects, stats] = await Promise.all([
+    getProjects(user.id),
+    getStats(user.id),
+  ]);
+}
+```
+
+---
+
+## 4. Server Actions
+
+### 4.1 基本的な実装
+
+```typescript
+// ✅ Server Actionsの実装
+// lib/actions/projects.ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { prisma } from "@/lib/db/prisma";
+import { auth } from "@/lib/auth";
+import { projectSchema } from "@/lib/validations/project";
+
+// 型安全なServer Action
+export async function createProject(formData: FormData) {
+  // 認証チェック
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  // バリデーション
+  const validatedFields = projectSchema.safeParse({
+    name: formData.get("name"),
+    description: formData.get("description"),
+  });
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: "入力内容に誤りがあります",
+    };
+  }
+
+  const { name, description } = validatedFields.data;
+
+  try {
+    // データベース操作
+    const project = await prisma.project.create({
+      data: {
+        name,
+        description,
+        userId: session.user.id,
+      },
+    });
+
+    // キャッシュの再検証
+    revalidatePath("/projects");
+    revalidatePath("/dashboard");
+
+    // リダイレクト
+    redirect(`/projects/${project.id}`);
+  } catch (error) {
+    return {
+      message: "プロジェクトの作成に失敗しました",
+    };
+  }
+}
+
+// 削除アクション
+export async function deleteProject(projectId: string) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    await prisma.project.delete({
+      where: {
+        id: projectId,
+        userId: session.user.id, // セキュリティ: 自分のプロジェクトのみ削除可
+      },
+    });
+
+    revalidatePath("/projects");
+    return { success: true };
+  } catch (error) {
+    return { 
+      success: false, 
+      message: "削除に失敗しました" 
+    };
+  }
+}
+
+// 更新アクション
+export async function updateProject(
+  projectId: string,
+  formData: FormData
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const validatedFields = projectSchema.safeParse({
+    name: formData.get("name"),
+    description: formData.get("description"),
+  });
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+    };
+  }
+
+  try {
+    await prisma.project.update({
+      where: {
+        id: projectId,
+        userId: session.user.id,
+      },
+      data: validatedFields.data,
+    });
+
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects");
+    
+    return { success: true };
+  } catch (error) {
+    return { 
+      success: false, 
+      message: "更新に失敗しました" 
+    };
+  }
+}
+```
+
+### 4.2 フォームでのServer Actions使用
+
+```typescript
+// ✅ Client ComponentでServer Actionsを使用
+// components/features/dashboard/create-project-form.tsx
+"use client";
+
+import { useFormState, useFormStatus } from "react-dom";
+import { createProject } from "@/lib/actions/projects";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+const initialState = {
+  message: null,
+  errors: {},
+};
+
+export function CreateProjectForm() {
+  const [state, formAction] = useFormState(createProject, initialState);
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <div>
+        <Label htmlFor="name">プロジェクト名</Label>
+        <Input
+          id="name"
+          name="name"
+          required
+          aria-describedby="name-error"
+        />
+        {state.errors?.name && (
+          <p id="name-error" className="text-sm text-red-500">
+            {state.errors.name}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <Label htmlFor="description">説明</Label>
+        <Textarea
+          id="description"
+          name="description"
+          aria-describedby="description-error"
+        />
+        {state.errors?.description && (
+          <p id="description-error" className="text-sm text-red-500">
+            {state.errors.description}
+          </p>
+        )}
+      </div>
+
+      {state.message && (
+        <p className="text-sm text-red-500">{state.message}</p>
+      )}
+
+      <SubmitButton />
+    </form>
+  );
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? "作成中..." : "プロジェクトを作成"}
+    </Button>
+  );
+}
+```
+
+### 4.3 プログラムからのServer Actions呼び出し
+
+```typescript
+// ✅ onClick等でServer Actionsを呼び出す
+// components/features/dashboard/delete-project-button.tsx
+"use client";
+
+import { useState, useTransition } from "react";
+import { deleteProject } from "@/lib/actions/projects";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
+
+export function DeleteProjectButton({ projectId }: { projectId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+  const router = useRouter();
+
+  function handleDelete() {
+    startTransition(async () => {
+      const result = await deleteProject(projectId);
+      
+      if (result.success) {
+        toast({
+          title: "削除しました",
+          description: "プロジェクトが削除されました",
+        });
+        router.push("/projects");
+      } else {
+        toast({
+          title: "エラー",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+    });
+  }
+
+  return (
+    <Button
+      variant="destructive"
+      onClick={handleDelete}
+      disabled={isPending}
+    >
+      {isPending ? "削除中..." : "削除"}
+    </Button>
+  );
+}
+```
+
+---
+
+## 5. API Routes（最小限の使用）
+
+### 5.1 API Routes使用ガイドライン
+
+**❌ 作成すべきでないケース**:
+- GETエンドポイント（Server Componentsを使用）
+- 内部データフェッチ用API（DALを使用）
+- CRUDのほとんど（Server Actionsを使用）
+
+**✅ 作成すべきケース**:
+- Webhooks（外部サービスから）
+- ファイルアップロード
+- 外部APIのProxy
+- サードパーティ統合
+
+### 5.2 Webhook実装例
+
+```typescript
+// ✅ Webhook APIの実装
+// app/api/webhooks/stripe/route.ts
+import { headers } from "next/headers";
+import { NextResponse } from "next/server";
+import Stripe from "stripe";
+import { prisma } from "@/lib/db/prisma";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2023-10-16",
+});
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = headers().get("stripe-signature");
+
+  if (!signature) {
+    return NextResponse.json(
+      { error: "No signature" },
+      { status: 400 }
+    );
+  }
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      webhookSecret
+    );
+  } catch (error) {
+    console.error("Webhook signature verification failed:", error);
+    return NextResponse.json(
+      { error: "Invalid signature" },
+      { status: 400 }
+    );
+  }
+
+  // イベント処理
+  try {
+    switch (event.type) {
+      case "checkout.session.completed":
+        const session = event.data.object as Stripe.Checkout.Session;
+        await handleCheckoutCompleted(session);
+        break;
+
+      case "customer.subscription.updated":
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionUpdated(subscription);
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error("Error processing webhook:", error);
+    return NextResponse.json(
+      { error: "Webhook handler failed" },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleCheckoutCompleted(
+  session: Stripe.Checkout.Session
+) {
+  // データベース更新
+  await prisma.subscription.create({
+    data: {
+      userId: session.metadata?.userId,
+      stripeCustomerId: session.customer as string,
+      stripeSubscriptionId: session.subscription as string,
+      status: "active",
+    },
+  });
+}
+
+async function handleSubscriptionUpdated(
+  subscription: Stripe.Subscription
+) {
+  await prisma.subscription.update({
+    where: {
+      stripeSubscriptionId: subscription.id,
+    },
+    data: {
+      status: subscription.status,
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    },
+  });
+}
+```
+
+### 5.3 ファイルアップロードAPI
+
+```typescript
+// ✅ ファイルアップロードAPIの実装
+// app/api/upload/route.ts
+import { NextResponse } from "next/server";
+import { put } from "@vercel/blob";
+import { auth } from "@/lib/auth";
+
+export async function POST(request: Request) {
+  const session = await auth();
+  
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: "No file provided" },
+        { status: 400 }
+      );
+    }
+
+    // ファイルサイズチェック（5MB）
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "File too large" },
+        { status: 400 }
+      );
+    }
+
+    // ファイルタイプチェック
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json(
+        { error: "Invalid file type" },
+        { status: 400 }
+      );
+    }
+
+    // アップロード
+    const blob = await put(file.name, file, {
+      access: "public",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+
+    return NextResponse.json({ url: blob.url });
+  } catch (error) {
+    console.error("Upload error:", error);
+    return NextResponse.json(
+      { error: "Upload failed" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+---
+
+## 6. キャッシュ戦略
+
+### 6.1 キャッシュの種類
+
+| キャッシュタイプ | 説明 | 使用場所 |
+|-----------------|------|---------|
+| Request Memoization | リクエスト内での重複排除 | Server Components |
+| Data Cache | サーバー間で永続化 | fetch, cache() |
+| Full Route Cache | 静的レンダリング結果 | ビルド時 |
+| Router Cache | クライアント側ナビゲーション | App Router |
+
+### 6.2 キャッシュ設定
+
+```typescript
+// ✅ fetchでのキャッシュ制御
+// デフォルト: キャッシュあり（推奨）
+const data = await fetch("https://api.example.com/data");
+
+// 時間ベースの再検証（ISR）
+const data = await fetch("https://api.example.com/data", {
+  next: { revalidate: 3600 }, // 1時間ごとに再検証
+});
+
+// キャッシュ無効化（動的レンダリング）
+const data = await fetch("https://api.example.com/data", {
+  cache: "no-store", // 毎回最新データを取得
+});
+
+// タグベースの再検証
+const data = await fetch("https://api.example.com/data", {
+  next: { tags: ["projects"] },
+});
+```
+
+```typescript
+// ✅ React cacheでの重複排除
+// lib/dal/projects.ts
+import { cache } from "react";
+import { prisma } from "@/lib/db/prisma";
+
+export const getProject = cache(async (id: string) => {
+  // 同じリクエスト内で複数回呼ばれても1回のみ実行
+  return await prisma.project.findUnique({
+    where: { id },
+  });
+});
+```
+
+### 6.3 キャッシュの再検証
+
+```typescript
+// ✅ Server Actionsでの再検証
+// lib/actions/projects.ts
+"use server";
+
+import { revalidatePath, revalidateTag } from "next/cache";
+
+export async function updateProject(id: string, data: ProjectData) {
+  await prisma.project.update({
+    where: { id },
+    data,
+  });
+
+  // パスベースの再検証
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${id}`);
+  revalidatePath("/dashboard");
+
+  // タグベースの再検証
+  revalidateTag("projects");
+}
+```
+
+### 6.4 Dynamic Rendering制御
+
+```typescript
+// ✅ ページレベルでのキャッシュ設定
+// app/projects/page.tsx
+
+// 静的レンダリング（デフォルト）
+export const dynamic = "auto";
+
+// 動的レンダリング（キャッシュなし）
+export const dynamic = "force-dynamic";
+
+// 静的レンダリング強制
+export const dynamic = "force-static";
+
+// エラー時の動的レンダリング
+export const dynamic = "error";
+
+// 再検証間隔の設定
+export const revalidate = 3600; // 1時間
+
+// 再検証なし（完全静的）
+export const revalidate = false;
+```
+
+---
+
+## 7. メタデータとSEO
+
+### 7.1 静的メタデータ
+
+```typescript
+// ✅ 静的メタデータの定義
+// app/page.tsx
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "ホーム | マイアプリ",
+  description: "マイアプリの説明文",
+  keywords: ["Next.js", "React", "TypeScript"],
+  authors: [{ name: "開発者名" }],
+  openGraph: {
+    title: "ホーム | マイアプリ",
+    description: "マイアプリの説明文",
+    type: "website",
+    locale: "ja_JP",
+    url: "https://example.com",
+    siteName: "マイアプリ",
+    images: [
+      {
+        url: "https://example.com/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "マイアプリのOGP画像",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ホーム | マイアプリ",
+    description: "マイアプリの説明文",
+    images: ["https://example.com/twitter-image.jpg"],
+    creator: "@twitter_handle",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+  },
+};
+
+export default function HomePage() {
+  return <div>ホームページ</div>;
+}
+```
+
+### 7.2 動的メタデータ
+
+```typescript
+// ✅ 動的メタデータの生成
+// app/projects/[id]/page.tsx
+import { Metadata } from "next";
+import { getProject } from "@/lib/dal/projects";
+import { notFound } from "next/navigation";
+
+type Props = {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+};
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const project = await getProject(params.id);
+
+  if (!project) {
+    return {
+      title: "プロジェクトが見つかりません",
+    };
+  }
+
+  return {
+    title: `${project.name} | マイアプリ`,
+    description: project.description,
+    openGraph: {
+      title: project.name,
+      description: project.description,
+      images: project.imageUrl ? [project.imageUrl] : [],
+    },
+  };
+}
+
+export default async function ProjectPage({ params }: Props) {
+  const project = await getProject(params.id);
+
+  if (!project) {
+    notFound();
+  }
+
+  return (
+    <div>
+      <h1>{project.name}</h1>
+      <p>{project.description}</p>
+    </div>
+  );
+}
+```
+
+### 7.3 JSON-LD構造化データ
+
+```typescript
+// ✅ 構造化データの実装
+// app/projects/[id]/page.tsx
+export default async function ProjectPage({ params }: Props) {
+  const project = await getProject(params.id);
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: project.name,
+    description: project.description,
+    image: project.imageUrl,
+    datePublished: project.createdAt.toISOString(),
+    dateModified: project.updatedAt.toISOString(),
+    author: {
+      "@type": "Person",
+      name: project.author.name,
+    },
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <article>
+        <h1>{project.name}</h1>
+        <p>{project.description}</p>
+      </article>
+    </>
+  );
+}
+```
+
+---
+
+## 8. 認証とセキュリティ
+
+### 8.1 Middleware での認証
+
+```typescript
+// ✅ ミドルウェアでの認証チェック
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
+
+export async function middleware(request: NextRequest) {
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
+                     request.nextUrl.pathname.startsWith("/register");
+  const isProtectedPage = request.nextUrl.pathname.startsWith("/dashboard") ||
+                          request.nextUrl.pathname.startsWith("/projects");
+
+  // 認証済みユーザーが認証ページにアクセス
+  if (isAuthPage && token) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // 未認証ユーザーが保護されたページにアクセス
+  if (isProtectedPage && !token) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * 以下を除くすべてのパスにマッチ:
+     * - api (APIルート)
+     * - _next/static (静的ファイル)
+     * - _next/image (画像最適化)
+     * - favicon.ico (ファビコン)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
+```
+
+### 8.2 Rate Limiting
+
+```typescript
+// ✅ レートリミットの実装
+// lib/rate-limit.ts
+import { LRUCache } from "lru-cache";
+
+type Options = {
+  uniqueTokenPerInterval?: number;
+  interval?: number;
+};
+
+export function rateLimit(options?: Options) {
+  const tokenCache = new LRUCache({
+    max: options?.uniqueTokenPerInterval || 500,
+    ttl: options?.interval || 60000,
+  });
+
+  return {
+    check: (limit: number, token: string) =>
+      new Promise<void>((resolve, reject) => {
+        const tokenCount = (tokenCache.get(token) as number[]) || [0];
+        if (tokenCount[0] === 0) {
+          tokenCache.set(token, tokenCount);
+        }
+        tokenCount[0] += 1;
+
+        const currentUsage = tokenCount[0];
+        const isRateLimited = currentUsage >= limit;
+
+        return isRateLimited ? reject() : resolve();
+      }),
+  };
+}
+
+// 使用例
+// app/api/data/route.ts
+import { rateLimit } from "@/lib/rate-limit";
+import { NextResponse } from "next/server";
+
+const limiter = rateLimit({
+  interval: 60 * 1000, // 60秒
+  uniqueTokenPerInterval: 500,
+});
+
+export async function POST(request: Request) {
+  const ip = request.headers.get("x-forwarded-for") || "unknown";
+
+  try {
+    await limiter.check(10, ip); // 10リクエスト/分
+  } catch {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429 }
+    );
+  }
+
+  // 処理続行
+  return NextResponse.json({ success: true });
+}
+```
+
+### 8.3 CSRF保護
+
+```typescript
+// ✅ Server ActionsはデフォルトでCSRF保護あり
+// 追加の保護が必要な場合
+// lib/csrf.ts
+import { headers } from "next/headers";
+
+export function validateCSRF() {
+  const headersList = headers();
+  const origin = headersList.get("origin");
+  const host = headersList.get("host");
+
+  if (!origin || !host) {
+    throw new Error("Missing origin or host header");
+  }
+
+  const originUrl = new URL(origin);
+  if (originUrl.host !== host) {
+    throw new Error("CSRF validation failed");
+  }
+}
+
+// Server Actionで使用
+"use server";
+
+export async function sensitiveAction() {
+  validateCSRF();
+  // 処理続行
+}
+```
+
+---
+
+## 9. エラーハンドリング
+
+### 9.1 Error Boundary
+
+```typescript
+// ✅ エラーバウンダリの実装
+// app/error.tsx
+"use client";
+
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    // エラーログを送信
+    console.error(error);
+  }, [error]);
+
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center">
+      <h2 className="text-2xl font-bold">問題が発生しました</h2>
+      <p className="mt-4 text-muted-foreground">
+        {error.message || "予期しないエラーが発生しました"}
+      </p>
+      <Button onClick={reset} className="mt-4">
+        もう一度試す
+      </Button>
+    </div>
+  );
+}
+```
+
+```typescript
+// ✅ グローバルエラーハンドラ
+// app/global-error.tsx
+"use client";
+
+export default function GlobalError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <html>
+      <body>
+        <h2>アプリケーションエラー</h2>
+        <button onClick={reset}>リセット</button>
+      </body>
+    </html>
+  );
+}
+```
+
+### 9.2 Not Found処理
+
+```typescript
+// ✅ カスタム404ページ
+// app/not-found.tsx
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
+export default function NotFound() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center">
+      <h1 className="text-4xl font-bold">404</h1>
+      <p className="mt-4 text-xl">ページが見つかりません</p>
+      <Button asChild className="mt-6">
+        <Link href="/">ホームに戻る</Link>
+      </Button>
+    </div>
+  );
+}
+```
+
+```typescript
+// ✅ プログラムからnotFoundを呼び出す
+// app/projects/[id]/page.tsx
+import { notFound } from "next/navigation";
+import { getProject } from "@/lib/dal/projects";
+
+export default async function ProjectPage({ 
+  params 
+}: { 
+  params: { id: string } 
+}) {
+  const project = await getProject(params.id);
+
+  if (!project) {
+    notFound(); // not-found.tsxを表示
+  }
+
+  return <div>{project.name}</div>;
+}
+```
+
+---
+
+## 10. パフォーマンス最適化
+
+### 10.1 画像最適化
+
+```typescript
+// ✅ next/imageの最適な使用
+import Image from "next/image";
+
+// 重要な画像（LCP対策）
+<Image
+  src="/hero.jpg"
+  alt="ヒーロー画像"
+  width={1200}
+  height={600}
+  priority // 優先的に読み込み
+  placeholder="blur" // ぼかしプレースホルダー
+  blurDataURL="data:image/jpeg;base64,..." // カスタムぼかし
+/>
+
+// 通常の画像
+<Image
+  src="/product.jpg"
+  alt="商品画像"
+  width={400}
+  height={300}
+  loading="lazy" // デフォルト: 遅延読み込み
+  quality={90} // 画質（デフォルト: 75）
+/>
+
+// レスポンシブ画像
+<Image
+  src="/banner.jpg"
+  alt="バナー"
+  fill
+  style={{ objectFit: "cover" }}
+  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+/>
+
+// 外部画像（next.config.mjsで設定必要）
+<Image
+  src="https://example.com/image.jpg"
+  alt="外部画像"
+  width={800}
+  height={600}
+  unoptimized={false} // 最適化を有効化
+/>
+```
+
+### 10.2 フォント最適化
+
+```typescript
+// ✅ next/fontの使用
+// app/layout.tsx
+import { Inter, Noto_Sans_JP } from "next/font/google";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const notoSansJP = Noto_Sans_JP({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "700"],
+  variable: "--font-noto-sans-jp",
+});
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="ja" className={`${inter.variable} ${notoSansJP.variable}`}>
+      <body className="font-sans">{children}</body>
+    </html>
+  );
+}
+
+// ✅ ローカルフォント
+import localFont from "next/font/local";
+
+const customFont = localFont({
+  src: [
+    {
+      path: "../public/fonts/custom-regular.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/custom-bold.woff2",
+      weight: "700",
+      style: "normal",
+    },
+  ],
+  variable: "--font-custom",
+});
+```
+
+### 10.3 Suspenseによる段階的ローディング
+
+```typescript
+// ✅ Suspenseでの部分的なストリーミング
+// app/dashboard/page.tsx
+import { Suspense } from "react";
+import { StatsCards } from "@/components/features/dashboard/stats-cards";
+import { RecentProjects } from "@/components/features/dashboard/recent-projects";
+import { ActivityFeed } from "@/components/features/dashboard/activity-feed";
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function DashboardPage() {
+  return (
+    <div className="space-y-8">
+      {/* 即座に表示 */}
+      <h1>ダッシュボード</h1>
+
+      {/* 各セクションを独立してストリーミング */}
+      <Suspense fallback={<StatsCardsSkeleton />}>
+        <StatsCards />
+      </Suspense>
+
+      <div className="grid gap-8 md:grid-cols-2">
+        <Suspense fallback={<RecentProjectsSkeleton />}>
+          <RecentProjects />
+        </Suspense>
+
+        <Suspense fallback={<ActivityFeedSkeleton />}>
+          <ActivityFeed />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
+function StatsCardsSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton key={i} className="h-32" />
+      ))}
+    </div>
+  );
+}
+```
+
+### 10.4 動的インポート
+
+```typescript
+// ✅ 動的インポートでバンドルサイズ削減
+import dynamic from "next/dynamic";
+
+// コンポーネントの動的インポート
+const HeavyChart = dynamic(
+  () => import("@/components/features/charts/heavy-chart"),
+  {
+    loading: () => <Skeleton className="h-64" />,
+    ssr: false, // クライアントサイドのみ
+  }
+);
+
+// 条件付き動的インポート
+export function ChartViewer({ type }: { type: string }) {
+  const Chart = dynamic(() => {
+    switch (type) {
+      case "bar":
+        return import("@/components/charts/bar-chart");
+      case "line":
+        return import("@/components/charts/line-chart");
+      case "pie":
+        return import("@/components/charts/pie-chart");
+      default:
+        return import("@/components/charts/default-chart");
+    }
+  });
+
+  return <Chart />;
+}
+```
+
+---
+
+## 11. 環境変数とセキュリティ
+
+### 11.1 環境変数の管理
+
+```bash
+# ✅ .env.local (Gitにコミットしない)
+# データベース
+DATABASE_URL="postgresql://..."
+
+# 認証
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secret-key"
+
+# API Keys（サーバーサイドのみ）
+STRIPE_SECRET_KEY="sk_test_..."
+OPENAI_API_KEY="sk-..."
+
+# 公開環境変数（クライアントサイドで使用可能）
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+```
+
+```typescript
+// ✅ 環境変数の型安全な使用
+// lib/env.ts
+import { z } from "zod";
+
+const envSchema = z.object({
+  // サーバーサイド環境変数
+  DATABASE_URL: z.string().url(),
+  NEXTAUTH_SECRET: z.string().min(1),
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
+
+  // クライアントサイド環境変数
+  NEXT_PUBLIC_APP_URL: z.string().url(),
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
+});
+
+export const env = envSchema.parse({
+  DATABASE_URL: process.env.DATABASE_URL,
+  NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+});
+
+// 使用例
+import { env } from "@/lib/env";
+
+const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+```
+
+### 11.2 セキュリティヘッダー
+
+```typescript
+// ✅ next.config.mjsでセキュリティヘッダー設定
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-DNS-Prefetch-Control",
+            value: "on",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-XSS-Protection",
+            value: "1; mode=block",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;
+```
+
+---
+
+## 12. テストとデバッグ
+
+### 12.1 Server Componentsのテスト
+
+```typescript
+// ✅ Server Componentsのテスト
+// __tests__/app/projects/page.test.tsx
+import { render, screen } from "@testing-library/react";
+import ProjectsPage from "@/app/projects/page";
+import { getProjects } from "@/lib/dal/projects";
+
+// モック
+jest.mock("@/lib/dal/projects");
+
+describe("ProjectsPage", () => {
+  it("should render projects", async () => {
+    const mockProjects = [
+      { id: "1", name: "Project 1", description: "Description 1" },
+      { id: "2", name: "Project 2", description: "Description 2" },
+    ];
+
+    (getProjects as jest.Mock).mockResolvedValue(mockProjects);
+
+    // Server Componentを直接レンダリング
+    const page = await ProjectsPage();
+    render(page);
+
+    expect(screen.getByText("Project 1")).toBeInTheDocument();
+    expect(screen.getByText("Project 2")).toBeInTheDocument();
+  });
+});
+```
+
+### 12.2 Server Actionsのテスト
+
+```typescript
+// ✅ Server Actionsのテスト
+// __tests__/lib/actions/projects.test.ts
+import { createProject } from "@/lib/actions/projects";
+import { prisma } from "@/lib/db/prisma";
+import { auth } from "@/lib/auth";
+
+jest.mock("@/lib/db/prisma");
+jest.mock("@/lib/auth");
+
+describe("createProject", () => {
+  it("should create a project", async () => {
+    (auth as jest.Mock).mockResolvedValue({
+      user: { id: "user-1" },
+    });
+
+    (prisma.project.create as jest.Mock).mockResolvedValue({
+      id: "project-1",
+      name: "Test Project",
+      description: "Test Description",
+      userId: "user-1",
+    });
+
+    const formData = new FormData();
+    formData.append("name", "Test Project");
+    formData.append("description", "Test Description");
+
+    const result = await createProject(formData);
+
+    expect(result).toHaveProperty("id", "project-1");
+    expect(prisma.project.create).toHaveBeenCalledWith({
+      data: {
+        name: "Test Project",
+        description: "Test Description",
+        userId: "user-1",
+      },
+    });
+  });
+});
+```
+
+---
+
+## 13. ビルドとデプロイ
+
+### 13.1 next.config.mjs設定
+
+```javascript
+// ✅ 本番用のnext.config.mjs
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // React Strict Mode
+  reactStrictMode: true,
+
+  // 画像最適化
+  images: {
+    domains: ["example.com", "cdn.example.com"],
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+  },
+
+  // 実験的機能
+  experimental: {
+    // Partial Prerendering
+    ppr: true,
+    // Server Actions
+    serverActions: {
+      bodySizeLimit: "2mb",
+      allowedOrigins: ["localhost:3000", "*.example.com"],
+    },
+  },
+
+  // バンドル分析
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+      };
+    }
+    return config;
+  },
+
+  // リダイレクト
+  async redirects() {
+    return [
+      {
+        source: "/old-route",
+        destination: "/new-route",
+        permanent: true,
+      },
+    ];
+  },
+
+  // リライト
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: "https://api.example.com/:path*",
+      },
+    ];
+  },
+};
+
+export default nextConfig;
+```
+
+### 13.2 デプロイチェックリスト
+
+#### ビルド前
+- [ ] 環境変数の設定確認
+- [ ] TypeScriptエラーの解消
+- [ ] ESLintエラーの解消
+- [ ] テストの実行と成功確認
+- [ ] 依存関係の更新とセキュリティチェック
+
+#### パフォーマンス
+- [ ] Lighthouse スコア確認（90+目標）
+- [ ] Core Web Vitals の確認
+  - LCP < 2.5秒
+  - FID < 100ms
+  - CLS < 0.1
+- [ ] バンドルサイズの確認
+- [ ] 画像の最適化確認
+
+#### SEO
+- [ ] メタデータの設定
+- [ ] sitemap.xml の生成
+- [ ] robots.txt の設定
+- [ ] 構造化データの実装
+- [ ] OGP画像の設定
+
+#### セキュリティ
+- [ ] 環境変数の安全な管理
+- [ ] HTTPS の有効化
+- [ ] セキュリティヘッダーの設定
+- [ ] CSP の設定
+- [ ] レートリミットの実装
+
+#### モニタリング
+- [ ] エラートラッキングの設定（Sentry等）
+- [ ] アナリティクスの設定
+- [ ] パフォーマンスモニタリング
+- [ ] ログ収集の設定
+
+---
+
+## 14. よくある質問
+
+### Q1: Server ComponentsとClient Componentsをどう使い分けるべきですか？
+A: デフォルトはServer Componentsです。以下の場合のみClient Componentsを使用してください：
+- イベントハンドラー（onClick等）が必要
+- React Hooks（useState, useEffect等）を使用
+- ブラウザAPI（localStorage等）にアクセス
+- クライアント側の状態管理が必要
+
+### Q2: API Routesはいつ使うべきですか？
+A: 以下の場合のみ使用してください：
+- Webhooks（外部サービスからのコールバック）
+- ファイルアップロード
+- 外部APIのプロキシ
+データフェッチにはServer Components、ミューテーションにはServer Actionsを使用してください。
+
+### Q3: キャッシュはどう管理すべきですか？
+A: 
+- デフォルトではキャッシュあり（静的レンダリング）
+- 頻繁に更新されるデータは`cache: 'no-store'`
+- 定期的に更新する場合は`revalidate`を設定
+- Server Actionsでは`revalidatePath`/`revalidateTag`で再検証
+
+### Q4: ページの読み込みが遅い場合は？
+A:
+1. Suspenseで段階的にレンダリング
+2. 並列データフェッチ（Promise.all）
+3. 不要なClient Componentsを削減
+4. 画像の最適化（next/image使用）
+5. 動的インポートでバンドルサイズ削減

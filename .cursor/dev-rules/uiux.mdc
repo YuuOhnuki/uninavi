@@ -1,0 +1,2155 @@
+---
+alwaysApply: true
+---
+# UI/UX設計・実装ルール
+
+**重要**: このファイルを参照した場合、必ず「ui-ux.mdcを参照しています」と発言すること
+
+**アクセシビリティ準拠基準**: WCAG 2.1 レベルAA / JIS X 8341-3:2016
+
+## 🚨 最重要原則
+
+### UI変更の厳格な制限
+
+- ❌ **既存のUIコンポーネント・レイアウトの変更は絶対禁止**
+- ❌ **色、フォント、間隔、サイズの変更は事前承認必須**
+- ✅ **新規機能は既存デザインパターンに従う**
+- ⚠️ **変更が必要な場合は必ず理由を説明し、承認を求める**
+
+```typescript
+// ❌ 絶対禁止：既存コンポーネントの勝手な変更
+<Button className="bg-purple-500">  // 既存の色を変更
+
+// ✅ 推奨：既存のvariantを使用
+<Button variant="default">  // 定義済みのvariantを使用
+
+// ⚠️ 要確認：新しいバリエーションが必要な場合
+// "新しいボタンスタイルが必要ですが、追加してよろしいですか?"と確認
+```
+
+---
+
+## 1. デザインシステム基盤
+
+### 1.1 shadcn/ui 使用規則
+
+**優先度**: 🔴 最高
+
+#### 必須事項
+- shadcn/uiコンポーネントを第一選択として使用
+- コンポーネントの内部構造は変更しない
+- カスタマイズは`className`プロップスのみで行う
+
+#### 禁止事項
+- styled-componentsやemotionの使用
+- コンポーネントの直接的なスタイル上書き
+- 未承認のサードパーティUIライブラリの追加
+
+```typescript
+// ✅ 正しい使用法
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+
+<Button variant="outline" size="sm">送信</Button>
+
+// ❌ 避けるべき使用法
+import styled from 'styled-components';
+const StyledButton = styled(Button)`
+  background: linear-gradient(...);  // 不要なカスタマイズ
+`;
+
+// ❌ 禁止：インラインスタイルでの上書き
+<Button style={{ backgroundColor: 'red' }}>送信</Button>
+```
+
+### 1.2 コンポーネント選択フロー
+
+```
+新しいUI要素が必要
+    ↓
+shadcn/uiに存在する? → YES → そのまま使用
+    ↓ NO
+既存カスタムコンポーネントで対応可能? → YES → 再利用
+    ↓ NO
+ユーザーに確認 → 承認後 → shadcn/ui準拠で新規作成
+```
+
+---
+
+## 2. スタイリング規約
+
+### 2.1 Tailwind CSS ベストプラクティス
+
+**優先度**: 🟡 高
+
+#### 基本原則
+- ユーティリティファーストアプローチを徹底
+- カスタムCSSは`@layer components`または`@layer utilities`で定義
+- クラス名は`kebab-case`を使用
+
+#### クラス記述順序
+1. レイアウト（flex, grid, display）
+2. ポジショニング（relative, absolute）
+3. サイズ（w-, h-, max-, min-）
+4. 間隔（p-, m-, space-）
+5. 装飾（bg-, text-, border-, rounded-）
+6. 状態（hover:, focus:, active:）
+7. レスポンシブ（sm:, md:, lg:）
+
+```typescript
+// ✅ 正しい順序
+<div className="flex items-center justify-between w-full p-4 bg-white border rounded-lg hover:bg-gray-50 md:p-6">
+
+// ❌ 悪い例：順序がバラバラ
+<div className="bg-white p-4 flex rounded-lg w-full items-center border md:p-6 justify-between hover:bg-gray-50">
+
+// ❌ 禁止：インラインスタイル
+<div style={{ display: 'flex', padding: '16px' }}>
+```
+
+### 2.2 カスタムスタイル定義
+
+```css
+/* globals.css */
+@layer components {
+  .card-elevated {
+    @apply rounded-xl border bg-card shadow-lg;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+```
+
+---
+
+## 3. レスポンシブデザイン
+
+**優先度**: 🟡 高
+
+### 3.1 ブレークポイント戦略
+
+| サイズ | ブレークポイント | 対象デバイス | 使用頻度 |
+|--------|------------------|--------------|----------|
+| `sm:` | 640px | スマートフォン（横） | 高 |
+| `md:` | 768px | タブレット | 高 |
+| `lg:` | 1024px | デスクトップ | 中 |
+| `xl:` | 1280px | 大画面 | 低 |
+| `2xl:` | 1536px | 超大画面 | 低 |
+
+### 3.2 モバイルファースト実装
+
+```typescript
+// ✅ 推奨：モバイルファースト
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+
+// ❌ 避ける：デスクトップファースト
+<div className="grid grid-cols-3 lg:grid-cols-2 md:grid-cols-1">
+
+// ✅ テキストサイズもモバイルから
+<h1 className="text-2xl md:text-3xl lg:text-4xl">
+
+// ✅ 条件付き表示
+<div className="hidden md:block">  // デスクトップのみ
+<div className="block md:hidden">  // モバイルのみ
+```
+
+---
+
+## 4. アクセシビリティ (WCAG 2.1 AA / JIS X 8341-3:2016)
+
+**優先度**: 🔴 最高
+
+### 4.1 知覚可能 (Perceivable)
+
+#### 4.1.1 テキストによる代替 (達成基準 1.1.1)
+
+```typescript
+// ✅ すべての非テキストコンテンツに代替テキスト
+<img src="/logo.png" alt="会社ロゴ" />
+<button aria-label="メニューを開く">
+  <Menu className="h-5 w-5" aria-hidden="true" />
+</button>
+
+// ✅ 装飾的な画像
+<img src="/decoration.png" alt="" role="presentation" />
+<Icon className="h-4 w-4" aria-hidden="true" />
+
+// ❌ 代替テキストなし
+<img src="/chart.png" />  // 必須の代替テキストがない
+```
+
+#### 4.1.2 時間依存メディア (達成基準 1.2.1, 1.2.2, 1.2.3)
+
+```typescript
+// ✅ 音声・映像コンテンツ
+<video controls>
+  <source src="/video.mp4" type="video/mp4" />
+  <track kind="captions" src="/captions.vtt" srclang="ja" label="日本語" />
+  <track kind="descriptions" src="/descriptions.vtt" srclang="ja" label="音声解説" />
+</video>
+
+// ✅ 自動再生の禁止
+<video autoPlay={false} muted={false}>
+```
+
+#### 4.1.3 適応可能 (達成基準 1.3.1, 1.3.2, 1.3.3)
+
+```typescript
+// ✅ セマンティックHTML（情報と構造）
+<article>
+  <header>
+    <h1>記事のタイトル</h1>
+    <p>投稿日: <time dateTime="2025-01-15">2025年1月15日</time></p>
+  </header>
+  <main>
+    <section>
+      <h2>セクション見出し</h2>
+      <p>本文...</p>
+    </section>
+  </main>
+  <footer>
+    <p>著者情報</p>
+  </footer>
+</article>
+
+// ✅ 意味のある順序（1.3.2）
+<nav aria-label="パンくずリスト">
+  <ol>
+    <li><a href="/">ホーム</a></li>
+    <li><a href="/products">商品一覧</a></li>
+    <li aria-current="page">商品詳細</li>
+  </ol>
+</nav>
+
+// ✅ 感覚的な特徴のみに依存しない（1.3.3）
+// ❌ 「右のボタンをクリック」「赤いアイコン」
+// ✅ 「送信ボタンをクリック」「エラーアイコン（赤色の×印）」
+<Button variant="destructive" aria-label="削除ボタン">
+  <X className="h-4 w-4" aria-hidden="true" />
+  削除
+</Button>
+```
+
+#### 4.1.4 識別可能 (達成基準 1.4.1, 1.4.3, 1.4.4, 1.4.10, 1.4.11, 1.4.12, 1.4.13)
+
+```typescript
+// ✅ 色だけに依存しない情報提供 (1.4.1)
+<div className="flex items-center gap-2">
+  <CheckCircle className="h-5 w-5 text-green-600" aria-hidden="true" />
+  <span>成功: データを保存しました</span>
+</div>
+
+<div className="flex items-center gap-2">
+  <AlertCircle className="h-5 w-5 text-red-600" aria-hidden="true" />
+  <span>エラー: 入力内容を確認してください</span>
+</div>
+
+// ✅ コントラスト比 (1.4.3) - 最低4.5:1（通常テキスト）、3:1（大きなテキスト）
+// Tailwindカラーチェック
+const contrastRatios = {
+  "text-gray-600 on bg-white": 4.54, // ✅ OK
+  "text-gray-400 on bg-white": 2.85, // ❌ NG (4.5:1未満)
+  "text-blue-600 on bg-white": 4.56, // ✅ OK
+};
+
+// ✅ テキストサイズ変更 (1.4.4) - 200%まで拡大可能
+<p className="text-base leading-relaxed">
+  {/* rem単位使用で拡大に対応 */}
+</p>
+
+// ✅ テキスト画像の禁止 (1.4.5)
+// ❌ <img src="/heading.png" alt="見出しテキスト">
+// ✅ <h1 className="text-3xl font-bold">見出しテキスト</h1>
+
+// ✅ リフロー対応 (1.4.10) - 横スクロールなし（320pxビューポート）
+<div className="max-w-full overflow-hidden">
+  <div className="break-words">
+    長いテキストコンテンツ...
+  </div>
+</div>
+
+// ✅ 非テキストコントラスト (1.4.11) - UI部品とグラフィカルオブジェクトは3:1
+<Button 
+  variant="outline" 
+  className="border-2 border-gray-700"  // 3:1以上のコントラスト
+>
+  ボタン
+</Button>
+
+// ✅ テキスト間隔の調整可能性 (1.4.12)
+// 行の高さ: 1.5倍以上
+// 段落間隔: 2倍以上
+// 文字間隔: 0.12倍以上
+// 単語間隔: 0.16倍以上
+<p className="leading-relaxed tracking-wide">
+  読みやすいテキスト
+</p>
+
+// ✅ ホバー/フォーカス時のコンテンツ (1.4.13)
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button variant="ghost" size="icon">
+        <Info className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>追加情報がここに表示されます</p>
+    </TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+### 4.2 操作可能 (Operable)
+
+#### 4.2.1 キーボード操作 (達成基準 2.1.1, 2.1.2, 2.1.4)
+
+```typescript
+// ✅ すべての機能がキーボードで操作可能 (2.1.1)
+<div
+  role="button"
+  tabIndex={0}
+  onClick={handleClick}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  }}
+>
+  カスタムボタン
+</div>
+
+// ✅ キーボードトラップなし (2.1.2)
+// モーダル内でのフォーカス管理
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogContent>
+    {/* Escキーでモーダルを閉じる機能が自動的に提供される */}
+    <DialogHeader>
+      <DialogTitle>モーダルタイトル</DialogTitle>
+    </DialogHeader>
+    {/* コンテンツ */}
+  </DialogContent>
+</Dialog>
+
+// ✅ 文字キーのショートカット (2.1.4)
+// 単一文字のショートカットは無効化、変更、または特定条件でのみ有効
+const handleKeyPress = (e: KeyboardEvent) => {
+  // Ctrl/Cmd/Altと組み合わせたショートカットのみ
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    handleSave();
+  }
+};
+```
+
+#### 4.2.2 十分な時間 (達成基準 2.2.1, 2.2.2)
+
+```typescript
+// ✅ 調整可能な制限時間 (2.2.1)
+const [timeRemaining, setTimeRemaining] = useState(300); // 5分
+
+<Alert>
+  <AlertTitle>セッションタイムアウト警告</AlertTitle>
+  <AlertDescription>
+    あと{Math.floor(timeRemaining / 60)}分{timeRemaining % 60}秒でセッションが終了します
+  </AlertDescription>
+  <Button onClick={extendSession}>時間を延長する</Button>
+</Alert>
+
+// ✅ 一時停止、停止、非表示 (2.2.2)
+// 自動更新、点滅、スクロール、移動するコンテンツ
+<div className="relative">
+  <Button
+    variant="outline"
+    size="sm"
+    onClick={() => setAutoPlay(!autoPlay)}
+    aria-label={autoPlay ? "カルーセルを一時停止" : "カルーセルを再生"}
+  >
+    {autoPlay ? <Pause /> : <Play />}
+  </Button>
+  <Carousel autoPlay={autoPlay} interval={5000}>
+    {/* スライド内容 */}
+  </Carousel>
+</div>
+```
+
+#### 4.2.3 発作と身体的反応 (達成基準 2.3.1)
+
+```typescript
+// ✅ 3回の閃光または閾値以下 (2.3.1)
+// 1秒間に3回を超える閃光を避ける
+// アニメーションの使用を慎重に
+<div className="animate-pulse">  // ゆっくりとした点滅
+  {/* コンテンツ */}
+</div>
+
+// ❌ 避けるべき
+<div className="animate-ping">  // 急速な点滅
+```
+
+#### 4.2.4 ナビゲート可能 (達成基準 2.4.1, 2.4.2, 2.4.3, 2.4.4, 2.4.5, 2.4.6, 2.4.7)
+
+```typescript
+// ✅ ブロックスキップ (2.4.1)
+<a 
+  href="#main-content" 
+  className="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 focus:z-50 focus:p-4 focus:bg-blue-600 focus:text-white"
+>
+  メインコンテンツへスキップ
+</a>
+
+<nav aria-label="メインナビゲーション">
+  {/* ナビゲーション */}
+</nav>
+
+<main id="main-content" tabIndex={-1}>
+  {/* メインコンテンツ */}
+</main>
+
+// ✅ ページタイトル (2.4.2)
+// Next.jsのMetadataを使用
+export const metadata: Metadata = {
+  title: '商品詳細 - ECサイト名',
+  description: '商品の詳細情報を表示するページです',
+};
+
+// ✅ フォーカス順序 (2.4.3)
+// タブ順序は論理的な順序に従う
+<form>
+  <input type="text" name="name" tabIndex={1} />
+  <input type="email" name="email" tabIndex={2} />
+  <button type="submit" tabIndex={3}>送信</button>
+</form>
+
+// ✅ リンクの目的 (2.4.4)
+// ❌ <a href="/page">こちら</a>
+// ❌ <a href="/page">続きを読む</a>
+// ✅
+<a href="/product/123" className="underline">
+  商品「ワイヤレスマウス」の詳細を見る
+</a>
+
+// または
+<a href="/article/456" aria-label="記事「アクセシビリティの基本」の続きを読む">
+  続きを読む
+</a>
+
+// ✅ 複数の方法 (2.4.5)
+// サイトマップ、検索機能、ナビゲーションメニュー
+<header>
+  <nav aria-label="メインナビゲーション">
+    <Link href="/">ホーム</Link>
+    <Link href="/about">会社情報</Link>
+    <Link href="/contact">お問い合わせ</Link>
+  </nav>
+  <div>
+    <Input type="search" placeholder="サイト内検索" aria-label="サイト内検索" />
+  </div>
+</header>
+
+// ✅ 見出しとラベル (2.4.6)
+<section>
+  <h2 className="text-2xl font-bold mb-4">商品一覧</h2>
+  {/* 明確な見出しで内容を説明 */}
+</section>
+
+<Label htmlFor="email">メールアドレス</Label>
+<Input id="email" type="email" />
+
+// ✅ フォーカスの可視化 (2.4.7)
+// Tailwindのfocus-visible
+<Button className="focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+  クリック
+</Button>
+
+// グローバルCSSでのフォーカススタイル
+/* globals.css */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+```
+
+#### 4.2.5 入力モダリティ (達成基準 2.5.1, 2.5.2, 2.5.3, 2.5.4)
+
+```typescript
+// ✅ ポインタジェスチャ (2.5.1)
+// 複雑なジェスチャに単純な代替手段を提供
+<div>
+  <Button onClick={handlePrevious}>前へ</Button>
+  <Swiper onSlideChange={handleSlideChange}>
+    {/* スライド */}
+  </Swiper>
+  <Button onClick={handleNext}>次へ</Button>
+</div>
+
+// ✅ ポインタのキャンセル (2.5.2)
+// mousedownではなくonClickを使用
+<Button onClick={handleClick}>  // ✅
+  実行
+</Button>
+
+// ❌ 避ける
+<Button onMouseDown={handleAction}>  // キャンセル不可
+
+// ✅ ラベルと名前 (2.5.3)
+// 視覚的なラベルとアクセシブルな名前を一致させる
+<Button aria-label="保存">保存</Button>  // ✅ 一致
+
+// ❌ 避ける
+<Button aria-label="データを保存する">保存</Button>  // 不一致
+
+// ✅ 動作の起動 (2.5.4)
+// デバイスの動きで機能を起動する場合、UIでも操作可能に
+<div>
+  <p>デバイスを振って更新</p>
+  <Button onClick={handleRefresh}>手動で更新</Button>
+</div>
+```
+
+### 4.3 理解可能 (Understandable)
+
+#### 4.3.1 読みやすさ (達成基準 3.1.1, 3.1.2)
+
+```typescript
+// ✅ ページの言語 (3.1.1)
+// layout.tsx または pages/_document.tsx
+<html lang="ja">
+
+// ✅ 部分的な言語 (3.1.2)
+<p>
+  この機能は<span lang="en">Progressive Web App</span>に対応しています。
+</p>
+
+<blockquote lang="en">
+  <p>The quick brown fox jumps over the lazy dog.</p>
+</blockquote>
+```
+
+#### 4.3.2 予測可能 (達成基準 3.2.1, 3.2.2, 3.2.3, 3.2.4)
+
+```typescript
+// ✅ フォーカス時の変化なし (3.2.1)
+// フォーカスだけでコンテキスト変更を起こさない
+<Input
+  type="text"
+  onFocus={() => {
+    // ✅ ヘルプテキスト表示（コンテキスト変更ではない）
+    setShowHint(true);
+  }}
+  // ❌ onFocus={() => navigate('/other-page')}  // 避ける
+/>
+
+// ✅ 入力時の変化なし (3.2.2)
+// 自動送信は明示的なボタンで
+<form>
+  <Select onValueChange={setValue}>
+    {/* 選択だけでは送信しない */}
+  </Select>
+  <Button type="submit">送信</Button>  {/* 明示的な送信 */}
+</form>
+
+// ✅ 一貫したナビゲーション (3.2.3)
+// 全ページで同じ順序のナビゲーション
+<nav aria-label="メインナビゲーション">
+  <Link href="/">ホーム</Link>
+  <Link href="/products">商品</Link>
+  <Link href="/about">会社情報</Link>
+  <Link href="/contact">お問い合わせ</Link>
+</nav>
+
+// ✅ 一貫した識別性 (3.2.4)
+// 同じ機能には同じラベル
+<Button>保存</Button>  // 全ページで「保存」を使用
+// ❌ あるページで「保存」、別ページで「セーブ」は避ける
+```
+
+#### 4.3.3 入力支援 (達成基準 3.3.1, 3.3.2, 3.3.3, 3.3.4)
+
+```typescript
+// ✅ エラーの特定 (3.3.1)
+<Form {...form}>
+  <FormField
+    control={form.control}
+    name="email"
+    render={({ field, fieldState }) => (
+      <FormItem>
+        <FormLabel>メールアドレス</FormLabel>
+        <FormControl>
+          <Input {...field} type="email" />
+        </FormControl>
+        {fieldState.error && (
+          <FormMessage id="email-error" role="alert">
+            {fieldState.error.message}
+          </FormMessage>
+        )}
+      </FormItem>
+    )}
+  />
+</Form>
+
+// ✅ ラベルまたは説明 (3.3.2)
+<div>
+  <Label htmlFor="password">
+    パスワード
+    <span className="text-red-500 ml-1" aria-label="必須">*</span>
+  </Label>
+  <Input
+    id="password"
+    type="password"
+    aria-required="true"
+    aria-describedby="password-hint"
+  />
+  <p id="password-hint" className="text-sm text-muted-foreground">
+    8文字以上、大文字・小文字・数字を含む
+  </p>
+</div>
+
+// ✅ エラー修正の提案 (3.3.3)
+{fieldState.error && (
+  <FormMessage role="alert">
+    メールアドレスの形式が正しくありません。
+    例: user@example.com のように入力してください。
+  </FormMessage>
+)}
+
+// ✅ エラー回避（法的・金融・データ） (3.3.4)
+// 送信前の確認、修正可能、取消可能
+<AlertDialog>
+  <AlertDialogTrigger asChild>
+    <Button variant="destructive">アカウント削除</Button>
+  </AlertDialogTrigger>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>本当に削除しますか？</AlertDialogTitle>
+      <AlertDialogDescription>
+        この操作は取り消せません。アカウントのすべてのデータが完全に削除されます。
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>キャンセル</AlertDialogCancel>
+      <AlertDialogAction onClick={handleDelete}>削除する</AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+```
+
+### 4.4 堅牢性 (Robust)
+
+#### 4.4.1 互換性 (達成基準 4.1.1, 4.1.2, 4.1.3)
+
+```typescript
+// ✅ 構文解析 (4.1.1)
+// 有効なHTML（Next.jsが自動的に処理）
+<div id="unique-id" className="container">
+  {/* 重複しないID、閉じタグの遵守 */}
+</div>
+
+// ✅ 名前・役割・値 (4.1.2)
+// カスタムコンポーネントに適切なARIA
+<div
+  role="tablist"
+  aria-label="設定タブ"
+>
+  <button
+    role="tab"
+    aria-selected={activeTab === 'general'}
+    aria-controls="general-panel"
+    id="general-tab"
+    onClick={() => setActiveTab('general')}
+  >
+    一般設定
+  </button>
+  <button
+    role="tab"
+    aria-selected={activeTab === 'advanced'}
+    aria-controls="advanced-panel"
+    id="advanced-tab"
+    onClick={() => setActiveTab('advanced')}
+  >
+    詳細設定
+  </button>
+</div>
+
+<div
+  role="tabpanel"
+  id="general-panel"
+  aria-labelledby="general-tab"
+  hidden={activeTab !== 'general'}
+>
+  {/* 一般設定内容 */}
+</div>
+
+// ✅ ステータスメッセージ (4.1.3)
+<div role="status" aria-live="polite" aria-atomic="true">
+  {isLoading ? '読み込み中...' : null}
+  {isSaved ? 'データを保存しました' : null}
+</div>
+
+// ✅ アラート
+<div role="alert" aria-live="assertive">
+  {error ? `エラー: ${error.message}` : null}
+</div>
+```
+
+---
+
+## 5. アニメーション・トランジション
+
+**優先度**: 🟢 中
+
+### 5.1 Tailwind アニメーション
+
+```typescript
+// ✅ prefers-reduced-motionへの配慮（WCAG 2.1 - 2.3.3）
+<div className="motion-safe:animate-fade-in motion-reduce:opacity-100">
+  コンテンツ
+</div>
+
+// ✅ シンプルなトランジション
+<div className="transition-all duration-300 hover:scale-105 motion-reduce:transition-none motion-reduce:hover:scale-100">
+  ホバー効果
+</div>
+
+// globals.css
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+
+### 5.2 framer-motion使用基準
+
+```typescript
+// ✅ アクセシブルなアニメーション
+import { motion, useReducedMotion } from "framer-motion";
+
+const shouldReduceMotion = useReducedMotion();
+
+<motion.div
+  initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ 
+    duration: shouldReduceMotion ? 0 : 0.3 
+  }}
+>
+  コンテンツ
+</motion.div>
+```
+
+### 5.3 アニメーション禁止事項
+
+- ❌ 3秒以上の長時間アニメーション
+- ❌ 1秒間に3回以上の閃光
+- ❌ ユーザー操作を妨げる強制的なアニメーション
+- ❌ 停止・一時停止ボタンのない自動再生アニメーション（5秒以上）
+
+---
+
+## 6. フォーム設計
+
+**優先度**: 🟡 高
+
+### 6.1 アクセシブルなフォーム実装
+
+```typescript
+// ✅ 完全なアクセシブルフォーム
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+
+const formSchema = z.object({
+  fullName: z.string().min(2, "氏名は2文字以上で入力してください"),
+  email: z.string().email("有効なメールアドレスを入力してください"),
+  phone: z.string().regex(/^0\d{9,10}$/, "電話番号は半角数字で入力してください"),
+  birthDate: z.string().min(1, "生年月日を選択してください"),
+  agreement: z.boolean().refine(val => val === true, "利用規約への同意が必要です"),
+});
+
+export function AccessibleForm() {
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+        {/* 氏名 */}
+        <FormField
+          control={form.control}
+          name="fullName"
+          render={({ field, fieldState }) => (
+            <FormItem>
+              <FormLabel>
+                氏名
+                <span className="text-red-500 ml-1" aria-label="必須">*</span>
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  autoComplete="name"
+                  aria-required="true"
+                  aria-invalid={fieldState.error ? "true" : "false"}
+                  aria-describedby={fieldState.error ? "fullName-error" : undefined}
+                />
+              </FormControl>
+              {fieldState.error && (
+                <FormMessage id="fullName-error" role="alert">
+                  {fieldState.error.message}
+                </FormMessage>
+              )}
+            </FormItem>
+          )}
+        />
+
+        {/* メールアドレス */}
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field, fieldState }) => (
+            <FormItem>
+              <FormLabel htmlFor="email">
+                メールアドレス
+                <span className="text-red-500 ml-1" aria-label="必須">*</span>
+              </FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  aria-required="true"
+                  aria-invalid={fieldState.error ? "true" : "false"}
+                  aria-describedby="email-hint email-error"
+                />
+              </FormControl>
+              <p id="email-hint" className="text-sm text-muted-foreground">
+                例: user@example.com
+              </p>
+              {fieldState.error && (
+                <FormMessage id="email-error" role="alert">
+                  {fieldState.error.message}
+                </FormMessage>
+              )}
+            </FormItem>
+          )}
+        />
+
+        {/* 電話番号 */}
+        <FormField
+          control={form.control}
+          name="phone"
+          render={({ field, fieldState }) => (
+            <FormItem>
+              <FormLabel htmlFor="phone">電話番号（任意）</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  id="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  aria-describedby="phone-hint"
+                  aria-invalid={fieldState.error ? "true" : "false"}
+                />
+              </FormControl>
+              <p id="phone-hint" className="text-sm text-muted-foreground">
+                ハイフンなしの半角数字で入力（例: 09012345678）
+              </p>
+              {fieldState.error && (
+                <FormMessage role="alert">{fieldState.error.message}</FormMessage>
+              )}
+            </FormItem>
+          )}
+        />
+
+        {/* 生年月日 */}
+        <FormField
+          control={form.control}
+          name="birthDate"
+          render={({ field, fieldState }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>
+                生年月日
+                <span className="text-red-500 ml-1" aria-label="必須">*</span>
+              </FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                      aria-required="true"
+                      aria-invalid={fieldState.error ? "true" : "false"}
+                    >
+                      {field.value ? (
+                        format(new Date(field.value), "PPP", { locale: ja })
+                      ) : (
+                        <span>日付を選択</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value ? new Date(field.value) : undefined}
+                    onSelect={(date) => field.onChange(date?.toISOString())}
+                    disabled={(date) => date > new Date()}
+                    locale={ja}
+                  />
+                </PopoverContent>
+              </Popover>
+              {fieldState.error && (
+                <FormMessage role="alert">{fieldState.error.message}</FormMessage>
+              )}
+            </FormItem>
+          )}
+        />
+
+        {/* チェックボックス */}
+        <FormField
+          control={form.control}
+          name="agreement"
+          render={({ field, fieldState }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  aria-required="true"
+                  aria-invalid={fieldState.error ? "true" : "false"}
+                  aria-describedby="agreement-error"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  <a href="/terms" className="underline" target="_blank" rel="noopener noreferrer">
+                    利用規約
+                  </a>
+                  に同意します
+                  <span className="text-red-500 ml-1" aria-label="必須">*</span>
+                </FormLabel>
+                {fieldState.error && (
+                  <FormMessage id="agreement-error" role="alert">
+                    {fieldState.error.message}
+                  </FormMessage>
+                )}
+              </div>
+            </FormItem>
+          )}
+        />
+
+        {/* 送信ボタン */}
+        <Button 
+          type="submit" 
+          disabled={isSubmitting}
+          className="w-full"
+        >
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+          {isSubmitting ? "送信中..." : "送信"}
+        </Button>
+      </form>
+    </Form>
+  );
+}
+```
+
+### 6.2 オートコンプリート属性
+
+```typescript
+// ✅ 適切なautocomplete属性（WCAG 2.1 - 1.3.5）
+const autoCompleteAttributes = {
+  name: "name",
+  email: "email",
+  tel: "tel",
+  country: "country",
+  postalCode: "postal-code",
+  addressLine1: "address-line1",
+  addressLine2: "address-line2",
+  creditCard: "cc-number",
+  creditCardExpiry: "cc-exp",
+  creditCardCVC: "cc-csc",
+};
+
+<Input
+  name="email"
+  type="email"
+  autoComplete="email"
+/>
+
+<Input
+  name="postal-code"
+  type="text"
+  autoComplete="postal-code"
+/>
+```
+
+---
+
+## 7. フィードバック・通知
+
+**優先度**: 🟡 高
+
+### 7.1 アクセシブルなトースト通知
+
+```typescript
+// ✅ ARIAライブリージョンを使用したトースト
+import { useToast } from "@/components/ui/use-toast";
+
+const { toast } = useToast();
+
+// 成功通知（polite）
+toast({
+  title: "保存しました",
+  description: "データが正常に保存されました",
+  duration: 5000,
+  // aria-live="polite" が自動的に適用される
+});
+
+// エラー通知（assertive）
+toast({
+  variant: "destructive",
+  title: "エラーが発生しました",
+  description: error.message,
+  duration: 7000,
+  // aria-live="assertive" が自動的に適用される
+});
+
+// カスタムトースト with アクション
+toast({
+  title: "変更を保存しますか？",
+  description: "未保存の変更があります",
+  action: (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleSave}
+      aria-label="変更を保存"
+    >
+      保存
+    </Button>
+  ),
+});
+```
+
+### 7.2 ローディング状態
+
+```typescript
+// ✅ アクセシブルなローディング表示
+import { Loader2 } from "lucide-react";
+
+// ボタンローディング
+<Button disabled={isLoading} aria-busy={isLoading}>
+  {isLoading && (
+    <Loader2 
+      className="mr-2 h-4 w-4 animate-spin" 
+      aria-hidden="true" 
+    />
+  )}
+  {isLoading ? "送信中..." : "送信"}
+</Button>
+
+// ページローディング
+<div role="status" aria-live="polite" aria-busy={isLoading}>
+  {isLoading ? (
+    <div className="flex items-center justify-center p-8">
+      <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+      <span className="ml-2">データを読み込んでいます...</span>
+    </div>
+  ) : (
+    <div>{content}</div>
+  )}
+</div>
+
+// スケルトンローディング
+<Skeleton className="h-4 w-full" aria-label="読み込み中" />
+```
+
+### 7.3 プログレスバー
+
+```typescript
+// ✅ アクセシブルなプログレスバー
+import { Progress } from "@/components/ui/progress";
+
+<div>
+  <label id="upload-label">ファイルアップロード中</label>
+  <Progress 
+    value={uploadProgress} 
+    aria-labelledby="upload-label"
+    aria-valuenow={uploadProgress}
+    aria-valuemin={0}
+    aria-valuemax={100}
+  />
+  <p className="text-sm text-muted-foreground mt-1">
+    {uploadProgress}% 完了
+  </p>
+</div>
+```
+
+---
+
+## 8. アイコンとイメージ
+
+**優先度**: 🟢 中
+
+### 8.1 アクセシブルなアイコン使用
+
+```typescript
+// ✅ 装飾的なアイコン
+<Button>
+  <Save className="mr-2 h-4 w-4" aria-hidden="true" />
+  保存
+</Button>
+
+// ✅ 意味を持つアイコン（テキストなし）
+<Button variant="ghost" size="icon" aria-label="設定を開く">
+  <Settings className="h-5 w-5" aria-hidden="true" />
+</Button>
+
+// ✅ ステータスアイコン
+<div className="flex items-center gap-2">
+  <CheckCircle 
+    className="h-5 w-5 text-green-600" 
+    aria-hidden="true" 
+  />
+  <span>
+    <span className="sr-only">成功:</span>
+    データを保存しました
+  </span>
+</div>
+
+// ❌ 避けるべき使用法
+<Button>
+  <Save className="h-4 w-4" />  // テキストなし、aria-labelなし
+</Button>
+```
+
+### 8.2 アクセシブルな画像
+
+```typescript
+// ✅ 情報を持つ画像
+import Image from "next/image";
+
+<Image
+  src="/product.jpg"
+  alt="ワイヤレスマウス - 黒色、3ボタン、USB接続"
+  width={400}
+  height={300}
+  priority
+/>
+
+// ✅ 装飾的な画像
+<Image
+  src="/background.jpg"
+  alt=""
+  role="presentation"
+  width={1920}
+  height={1080}
+/>
+
+// ✅ 複雑な情報を持つ画像（チャート、図表）
+<figure>
+  <Image
+    src="/sales-chart.png"
+    alt="2024年売上推移グラフ"
+    width={800}
+    height={400}
+    aria-describedby="chart-description"
+  />
+  <figcaption id="chart-description">
+    2024年1月から12月までの月次売上推移。
+    1月: 100万円、2月: 120万円...12月: 180万円と右肩上がりの成長。
+  </figcaption>
+</figure>
+
+// ✅ SVGアイコン
+<svg 
+  className="h-6 w-6" 
+  aria-labelledby="icon-title"
+  role="img"
+>
+  <title id="icon-title">ホームアイコン</title>
+  <path d="..." />
+</svg>
+```
+
+---
+
+## 9. ダークモード対応
+
+**優先度**: 🟡 高
+
+### 9.1 アクセシブルなダークモード実装
+
+```typescript
+// ✅ コントラスト比を維持したダークモード
+// globals.css
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  /* ... */
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  /* ... */
+}
+
+// ✅ テーマ切り替え
+import { useTheme } from "next-themes";
+import { Moon, Sun } from "lucide-react";
+
+export function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      aria-label={`テーマを${theme === "dark" ? "ライト" : "ダーク"}モードに切り替える`}
+    >
+      <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" aria-hidden="true" />
+      <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" aria-hidden="true" />
+      <span className="sr-only">テーマ切り替え</span>
+    </Button>
+  );
+}
+```
+
+---
+
+## 10. コンポーネント設計原則
+
+**優先度**: 🟡 高
+
+### 10.1 アクセシブルなProps設計
+
+```typescript
+// ✅ アクセシビリティを考慮したProps
+interface AccessibleButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children: React.ReactNode;
+  variant?: "default" | "outline" | "ghost" | "destructive";
+  size?: "sm" | "md" | "lg";
+  isLoading?: boolean;
+  loadingText?: string;
+  "aria-label"?: string;
+  "aria-describedby"?: string;
+}
+
+// ✅ 使用例
+<AccessibleButton
+  variant="default"
+  isLoading={isSubmitting}
+  loadingText="送信中..."
+  aria-describedby="submit-hint"
+>
+  送信
+</AccessibleButton>
+```
+
+### 10.2 複合コンポーネントの設計
+
+```typescript
+// ✅ アクセシブルなタブコンポーネント
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+<Tabs defaultValue="account" className="w-full">
+  <TabsList aria-label="アカウント設定">
+    <TabsTrigger value="account">アカウント</TabsTrigger>
+    <TabsTrigger value="password">パスワード</TabsTrigger>
+    <TabsTrigger value="notifications">通知</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="account">
+    <h2 className="text-xl font-semibold mb-4">アカウント設定</h2>
+    {/* コンテンツ */}
+  </TabsContent>
+  
+  <TabsContent value="password">
+    <h2 className="text-xl font-semibold mb-4">パスワード変更</h2>
+    {/* コンテンツ */}
+  </TabsContent>
+  
+  <TabsContent value="notifications">
+    <h2 className="text-xl font-semibold mb-4">通知設定</h2>
+    {/* コンテンツ */}
+  </TabsContent>
+</Tabs>
+```
+
+---
+
+## 11. パフォーマンス最適化
+
+**優先度**: 🟢 中
+
+### 11.1 アクセシビリティを損なわないパフォーマンス対策
+
+```typescript
+// ✅ 遅延ロードとアクセシビリティの両立
+import dynamic from "next/dynamic";
+
+const HeavyChart = dynamic(() => import("@/components/HeavyChart"), {
+  loading: () => (
+    <div role="status" aria-live="polite">
+      <Skeleton className="h-64 w-full" />
+      <span className="sr-only">チャートを読み込んでいます...</span>
+    </div>
+  ),
+  ssr: false,
+});
+
+// ✅ 画像の遅延ロード
+<Image
+  src="/large-image.jpg"
+  alt="商品画像"
+  width={800}
+  height={600}
+  loading="lazy"
+  placeholder="blur"
+/>
+```
+
+---
+
+## 12. テストとドキュメント
+
+**優先度**: 🟢 中
+
+### 12.1 アクセシビリティテスト
+
+```typescript
+// ✅ Jest + Testing Libraryでのa11yテスト
+import { render, screen } from "@testing-library/react";
+import { axe, toHaveNoViolations } from "jest-axe";
+
+expect.extend(toHaveNoViolations);
+
+describe("Button Component", () => {
+  it("should not have accessibility violations", async () => {
+    const { container } = render(
+      <Button variant="default">クリック</Button>
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it("should have accessible name", () => {
+    render(<Button aria-label="保存ボタン">保存</Button>);
+    expect(screen.getByRole("button", { name: "保存ボタン" })).toBeInTheDocument();
+  });
+});
+```
+
+### 12.2 アクセシビリティドキュメント
+
+```typescript
+/**
+ * アクセシブルなボタンコンポーネント
+ * 
+ * WCAG 2.1 準拠:
+ * - 達成基準 2.1.1: キーボード操作可能
+ * - 達成基準 2.4.7: フォーカスの可視化
+ * - 達成基準 4.1.2: 名前・役割・値
+ * 
+ * @example
+ * ```tsx
+ * // 基本的な使用
+ * <Button variant="default">送信</Button>
+ * 
+ * // アイコンのみの場合は必ずaria-labelを指定
+ * <Button variant="ghost" size="icon" aria-label="メニューを開く">
+ *   <Menu className="h-5 w-5" />
+ * </Button>
+ * 
+ * // ローディング状態
+ * <Button isLoading loadingText="送信中...">送信</Button>
+ * ```
+ */
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, isLoading, loadingText, children, ...props }, ref) => {
+    return (
+      <button
+        ref={ref}
+        className={cn(buttonVariants({ variant, size, className }))}
+        disabled={isLoading || props.disabled}
+        aria-busy={isLoading}
+        {...props}
+      >
+        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+        {isLoading && loadingText ? loadingText : children}
+      </button>
+    );
+  }
+);
+```
+
+---
+
+## 13. アクセシビリティチェックリスト
+
+### 実装前チェック
+- [ ] WCAG 2.1 レベルAA達成基準を確認
+- [ ] JIS X 8341-3:2016 適合レベルAAを確認
+- [ ] セマンティックHTMLの使用を検討
+- [ ] キーボード操作の実装方法を確認
+- [ ] スクリーンリーダーでの読み上げを考慮
+
+### 実装中チェック
+- [ ] すべての画像に適切な代替テキスト
+- [ ] フォーム要素にラベルとエラーメッセージ
+- [ ] 適切なARIA属性の使用
+- [ ] キーボードでの操作可能性
+- [ ] フォーカス表示の可視化
+- [ ] 色だけに依存しない情報提供
+- [ ] コントラスト比の確認（4.5:1以上）
+
+### 実装後チェック
+- [ ] axeなどのツールでの自動チェック
+- [ ] キーボードのみでの操作テスト
+- [ ] スクリーンリーダー（NVDA、VoiceOver）でのテスト
+- [ ] ダークモードでのコントラスト確認
+- [ ] ズーム200%での表示確認
+- [ ] モバイルデバイスでの操作確認
+- [ ] `@todo.md`の更新
+
+---
+
+## 14. アクセシビリティツール
+
+### 14.1 開発時に使用するツール
+
+```bash
+# ESLint pluginのインストール
+npm install eslint-plugin-jsx-a11y --save-dev
+
+# axe-coreのインストール
+npm install @axe-core/react --save-dev
+
+# jest-axeのインストール
+npm install jest-axe --save-dev
+```
+
+```javascript
+// .eslintrc.js
+module.exports = {
+  extends: [
+    'next/core-web-vitals',
+    'plugin:jsx-a11y/recommended',
+  ],
+  plugins: ['jsx-a11y'],
+  rules: {
+    'jsx-a11y/alt-text': 'error',
+    'jsx-a11y/aria-props': 'error',
+    'jsx-a11y/aria-role': 'error',
+    'jsx-a11y/role-has-required-aria-props': 'error',
+  },
+};
+```
+
+### 14.2 ブラウザ拡張機能
+- **axe DevTools**: 自動アクセシビリティチェック
+- **WAVE**: ビジュアルフィードバック付きチェック
+- **Lighthouse**: パフォーマンス＋アクセシビリティ評価
+- **NoCoffee**: 視覚障害シミュレーション
+
+### 14.3 スクリーンリーダー
+- **Windows**: NVDA（無料）
+- **macOS/iOS**: VoiceOver（標準搭載）
+- **Android**: TalkBack（標準搭載）
+
+---
+
+## 15. よくある質問（アクセシビリティ編）
+
+### Q1: アイコンボタンのaria-labelは必須ですか？
+A: はい、テキストラベルがない場合は必須です。スクリーンリーダーユーザーがボタンの目的を理解できません。
+
+### Q2: divやspanをボタンとして使用してもいいですか？
+A: いいえ、必ず`<button>`要素を使用してください。どうしても必要な場合は、`role="button"`、`tabIndex={0}`、キーボードイベントの実装が必要です。
+
+### Q3: すべてのコンポーネントにARIA属性が必要ですか？
+A: いいえ、セマンティックHTMLを適切に使用すれば、多くの場合ARIAは不要です。「ARIAを使わない」が第一原則です。
+
+### Q4: ダークモードでもコントラスト比を守る必要がありますか？
+A: はい、ライトモードとダークモードの両方で4.5:1（通常テキスト）または3:1（大きなテキスト）を維持する必要があります。
+
+### Q5: モバイルでもキーボード操作の対応が必要ですか？
+A: モバイルでは主にタッチ操作ですが、外部キーボード接続時のために対応が推奨されます。
+
+---
+
+## 16. 緊急時の対応
+
+### アクセシビリティ問題発見時
+1. **即座に報告**: 影響範囲と深刻度を特定
+2. **一時的な対策**: 可能であればクイックフィックス
+3. **根本的な修正**: WCAG達成基準に基づいた恒久的な解決
+4. **再発防止**: チェックリストとテストの追加
+
+### クリティカルな問題の優先順位
+1. **レベル1（緊急）**: キーボード操作不可、スクリーンリーダーで完全に使用不可
+2. **レベル2（高）**: コントラスト比不足、代替テキスト欠如
+3. **レベル3（中）**: フォーカス表示不明確、ARIA属性の誤用
+4. **レベル4（低）**: 推奨事項の未実装
+
+---
+
+## 17. 参考リソース
+
+### 公式ガイドライン
+- [WCAG 2.1](https://www.w3.org/TR/WCAG21/)
+- [JIS X 8341-3:2016](https://www.jisc.go.jp/)
+- [WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/)
+- [MDN Web Docs - Accessibility](https://developer.mozilla.org/ja/docs/Web/Accessibility)
+
+### 日本語リソース
+- [ウェブアクセシビリティ基盤委員会 (WAIC)](https://waic.jp/)
+- [みんなの公共サイト運用ガイドライン](https://www.soumu.go.jp/main_sosiki/joho_tsusin/b_free/guideline.html)
+- [アクセシビリティサポーテッドガイドライン](https://waic.jp/docs/as/)
+
+### ツールとライブラリ
+- [axe DevTools](https://www.deque.com/axe/devtools/)
+- [Pa11y](https://pa11y.org/)
+- [react-aria (Adobe)](https://react-spectrum.adobe.com/react-aria/)
+
+---
+
+## 18. アクセシビリティ実装パターン集
+
+### 18.1 モーダルダイアログ
+
+```typescript
+// ✅ 完全にアクセシブルなモーダル
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+
+export function AccessibleModal() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button>モーダルを開く</Button>
+      </DialogTrigger>
+      
+      <DialogContent
+        // aria-labelledby と aria-describedby は自動的に設定される
+        onEscapeKeyDown={(e) => {
+          // Escキーでモーダルを閉じる（WCAG 2.1.2）
+          setIsOpen(false);
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>確認</DialogTitle>
+          <DialogDescription>
+            この操作を実行してもよろしいですか？
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="py-4">
+          {/* モーダルコンテンツ */}
+        </div>
+        
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">キャンセル</Button>
+          </DialogClose>
+          <Button variant="default" onClick={handleConfirm}>
+            確認
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+### 18.2 アコーディオン
+
+```typescript
+// ✅ アクセシブルなアコーディオン
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+
+export function AccessibleAccordion() {
+  return (
+    <Accordion type="single" collapsible className="w-full">
+      <AccordionItem value="item-1">
+        <AccordionTrigger>
+          アクセシビリティとは何ですか？
+        </AccordionTrigger>
+        <AccordionContent>
+          アクセシビリティとは、年齢や障害の有無に関係なく、
+          誰もが情報やサービスを利用できるようにすることです。
+        </AccordionContent>
+      </AccordionItem>
+      
+      <AccordionItem value="item-2">
+        <AccordionTrigger>
+          WCAG 2.1とは何ですか？
+        </AccordionTrigger>
+        <AccordionContent>
+          WCAG 2.1は、ウェブコンテンツをよりアクセシブルにするための
+          国際的なガイドラインです。
+        </AccordionContent>
+      </AccordionItem>
+      
+      <AccordionItem value="item-3">
+        <AccordionTrigger>
+          スクリーンリーダーとは何ですか？
+        </AccordionTrigger>
+        <AccordionContent>
+          スクリーンリーダーは、画面上のテキストを音声で読み上げる
+          支援技術です。視覚障害者が主に使用します。
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+```
+
+### 18.3 ドロップダウンメニュー
+
+```typescript
+// ✅ アクセシブルなドロップダウンメニュー
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuShortcut,
+} from "@/components/ui/dropdown-menu";
+
+export function AccessibleDropdown() {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" aria-label="メニューを開く">
+          <Menu className="h-5 w-5" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>マイアカウント</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        
+        <DropdownMenuItem onSelect={() => navigate('/profile')}>
+          <User className="mr-2 h-4 w-4" aria-hidden="true" />
+          <span>プロフィール</span>
+          <DropdownMenuShortcut>⌘P</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        
+        <DropdownMenuItem onSelect={() => navigate('/settings')}>
+          <Settings className="mr-2 h-4 w-4" aria-hidden="true" />
+          <span>設定</span>
+          <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        
+        <DropdownMenuSeparator />
+        
+        <DropdownMenuItem onSelect={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+          <span>ログアウト</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+```
+
+### 18.4 データテーブル
+
+```typescript
+// ✅ アクセシブルなデータテーブル
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+export function AccessibleTable() {
+  return (
+    <Table>
+      <TableCaption>最近の注文一覧</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-[100px]">
+            注文番号
+          </TableHead>
+          <TableHead>商品名</TableHead>
+          <TableHead>注文日</TableHead>
+          <TableHead className="text-right">金額</TableHead>
+          <TableHead>
+            <span className="sr-only">操作</span>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {orders.map((order) => (
+          <TableRow key={order.id}>
+            <TableCell className="font-medium">
+              {order.id}
+            </TableCell>
+            <TableCell>{order.productName}</TableCell>
+            <TableCell>
+              <time dateTime={order.orderDate}>
+                {formatDate(order.orderDate)}
+              </time>
+            </TableCell>
+            <TableCell className="text-right">
+              ¥{order.amount.toLocaleString()}
+            </TableCell>
+            <TableCell>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleView(order.id)}
+                aria-label={`注文${order.id}の詳細を表示`}
+              >
+                詳細
+              </Button>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+```
+
+### 18.5 ページネーション
+
+```typescript
+// ✅ アクセシブルなページネーション
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+
+export function AccessiblePagination({ currentPage, totalPages }: Props) {
+  return (
+    <nav aria-label="ページネーション">
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              href={`?page=${currentPage - 1}`}
+              aria-disabled={currentPage === 1}
+              tabIndex={currentPage === 1 ? -1 : undefined}
+              aria-label="前のページへ"
+            />
+          </PaginationItem>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <PaginationItem key={page}>
+              <PaginationLink
+                href={`?page=${page}`}
+                isActive={page === currentPage}
+                aria-label={`ページ${page}へ移動`}
+                aria-current={page === currentPage ? "page" : undefined}
+              >
+                {page}
+              </PaginationLink>
+            </PaginationItem>
+          ))}
+          
+          <PaginationItem>
+            <PaginationNext
+              href={`?page=${currentPage + 1}`}
+              aria-disabled={currentPage === totalPages}
+              tabIndex={currentPage === totalPages ? -1 : undefined}
+              aria-label="次のページへ"
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </nav>
+  );
+}
+```
+
+### 18.6 検索フォーム
+
+```typescript
+// ✅ アクセシブルな検索フォーム
+import { Search, X } from "lucide-react";
+
+export function AccessibleSearchForm() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  return (
+    <div className="relative">
+      <form role="search" onSubmit={handleSubmit}>
+        <Label htmlFor="search-input" className="sr-only">
+          サイト内検索
+        </Label>
+        <div className="relative">
+          <Search
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            id="search-input"
+            type="search"
+            placeholder="検索..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-10 pr-10"
+            aria-autocomplete="list"
+            aria-controls="search-results"
+            aria-expanded={results.length > 0}
+            aria-activedescendant={activeResultId}
+          />
+          {query && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2"
+              onClick={() => setQuery("")}
+              aria-label="検索をクリア"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+      </form>
+
+      {/* 検索結果 */}
+      {results.length > 0 && (
+        <div
+          id="search-results"
+          role="listbox"
+          className="absolute z-50 mt-2 w-full rounded-md border bg-popover p-2 shadow-md"
+        >
+          <p className="px-2 py-1 text-sm text-muted-foreground">
+            {results.length}件の結果
+          </p>
+          {results.map((result, index) => (
+            <div
+              key={result.id}
+              id={`result-${index}`}
+              role="option"
+              aria-selected={index === activeIndex}
+              className="cursor-pointer rounded px-2 py-2 hover:bg-accent"
+              onClick={() => handleSelect(result)}
+            >
+              <div className="font-medium">{result.title}</div>
+              <div className="text-sm text-muted-foreground">
+                {result.description}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ローディング状態 */}
+      {isLoading && (
+        <div role="status" aria-live="polite" className="sr-only">
+          検索中...
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 18.7 アラート・通知
+
+```typescript
+// ✅ アクセシブルなアラート
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
+
+export function AccessibleAlerts() {
+  return (
+    <div className="space-y-4">
+      {/* 成功メッセージ */}
+      <Alert variant="default" role="status" aria-live="polite">
+        <CheckCircle className="h-4 w-4" aria-hidden="true" />
+        <AlertTitle>成功</AlertTitle>
+        <AlertDescription>
+          データが正常に保存されました。
+        </AlertDescription>
+      </Alert>
+
+      {/* エラーメッセージ */}
+      <Alert variant="destructive" role="alert" aria-live="assertive">
+        <AlertCircle className="h-4 w-4" aria-hidden="true" />
+        <AlertTitle>エラー</AlertTitle>
+        <AlertDescription>
+          データの保存に失敗しました。もう一度お試しください。
+        </AlertDescription>
+      </Alert>
+
+      {/* 警告メッセージ */}
+      <Alert role="status" aria-live="polite">
+        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        <AlertTitle>警告</AlertTitle>
+        <AlertDescription>
+          この操作は取り消すことができません。
+        </AlertDescription>
+      </Alert>
+
+      {/* 情報メッセージ */}
+      <Alert role="status" aria-live="polite">
+        <Info className="h-4 w-4" aria-hidden="true" />
+        <AlertTitle>お知らせ</AlertTitle>
+        <AlertDescription>
+          システムメンテナンスは2025年11月3日 2:00〜4:00に実施されます。
+        </AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+```
+
+### 18.8 スキップリンク
+
+```typescript
+// ✅ アクセシブルなスキップリンク
+// layout.tsx または _app.tsx
+export default function RootLayout({ children }: Props) {
+  return (
+    <html lang="ja">
+      <body>
+        {/* スキップリンク */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          メインコンテンツへスキップ
+        </a>
+        
+        <a
+          href="#navigation"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-32 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          ナビゲーションへスキップ
+        </a>
+
+        <Header />
+        
+        <nav id="navigation" aria-label="メインナビゲーション">
+          {/* ナビゲーション */}
+        </nav>
+
+        <main id="main-content" tabIndex={-1}>
+          {children}
+        </main>
+
+        <Footer />
+      </body>
+    </html>
+  );
+}
+```
+
+---
+
+## 19. コントラスト比計算ツール
+
+### 19.1 Tailwind色のコントラスト比
+
+```typescript
+// ✅ コントラスト比チェック関数
+function getContrastRatio(foreground: string, background: string): number {
+  // 相対輝度を計算
+  const getLuminance = (rgb: number[]): number => {
+    const [r, g, b] = rgb.map((val) => {
+      const s = val / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+
+  const l1 = getLuminance(hexToRgb(foreground));
+  const l2 = getLuminance(hexToRgb(background));
+
+  const lighter = Math.max(l1, l2);
+  const darker = Math.min(l1, l2);
+
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+// ✅ WCAG AA / AAA適合チェック
+function checkWCAGCompliance(ratio: number, fontSize: number, isBold: boolean) {
+  const isLargeText = fontSize >= 18 || (fontSize >= 14 && isBold);
+  
+  return {
+    aa: isLargeText ? ratio >= 3 : ratio >= 4.5,
+    aaa: isLargeText ? ratio >= 4.5 : ratio >= 7,
+    ratio: ratio.toFixed(2),
+  };
+}
+
+// 使用例
+const ratio = getContrastRatio('#000000', '#FFFFFF'); // 21:1 (完璧)
+const compliance = checkWCAGCompliance(ratio, 16, false);
+console.log(compliance); // { aa: true, aaa: true, ratio: '21.00' }
+```
+
+### 19.2 推奨色の組み合わせ
+
+```typescript
+// ✅ WCAG AA準拠の色の組み合わせ（Tailwind CSS）
+const wcagCompliantColors = {
+  // 通常テキスト（4.5:1以上）
+  normalText: [
+    { fg: 'text-gray-900', bg: 'bg-white', ratio: 21 },
+    { fg: 'text-gray-800', bg: 'bg-white', ratio: 15.8 },
+    { fg: 'text-gray-700', bg: 'bg-white', ratio: 12.6 },
+    { fg: 'text-blue-700', bg: 'bg-white', ratio: 8.6 },
+    { fg: 'text-green-700', bg: 'bg-white', ratio: 5.3 },
+    { fg: 'text-white', bg: 'bg-gray-800', ratio: 15.8 },
+    { fg: 'text-white', bg: 'bg-blue-600', ratio: 8.6 },
+  ],
+  
+  // 大きなテキスト（3:1以上）
+  largeText: [
+    { fg: 'text-gray-600', bg: 'bg-white', ratio: 4.5 },
+    { fg: 'text-blue-500', bg: 'bg-white', ratio: 3.1 },
+    { fg: 'text-white', bg: 'bg-gray-600', ratio: 4.5 },
+  ],
+  
+  // UIコンポーネント（3:1以上）
+  uiComponents: [
+    { border: 'border-gray-400', bg: 'bg-white', ratio: 3.1 },
+    { border: 'border-blue-500', bg: 'bg-white', ratio: 3.1 },
+  ],
+};
+```
+
+---
+
+## 20. まとめ：アクセシビリティファーストの開発
+
+### 20.1 基本原則の再確認
+
+1. **セマンティックHTMLの使用**
+   - 適切な要素を使用することで、多くのアクセシビリティが自動的に提供される
+
+2. **ARIAは最後の手段**
+   - ネイティブHTMLで実現できない場合のみ使用
+   - 「ARIAを使わない」が第一原則
+
+3. **キーボード操作可能**
+   - すべての機能はキーボードのみで操作可能であるべき
+   - フォーカス管理を適切に行う
+
+4. **視覚的情報だけに依存しない**
+   - 色、形、位置だけでなく、テキストや音声でも情報を伝える
+
+5. **十分なコントラスト**
+   - WCAG 2.1 レベルAA: 通常テキスト4.5:1、大きなテキスト3:1
+
+6. **エラーの明確な通知**
+   - エラーの特定、説明、修正方法の提示
+
+7. **ユーザーへの十分な時間**
+   - タイムアウトは調整可能に
+   - 自動更新は停止可能に
+
+### 20.2 開発ワークフロー
+
+```
+1. 設計段階
+   ├─ セマンティックHTML構造の検討
+   ├─ キーボード操作フローの設計
+   └─ カラーコントラストの確認
+
+2. 実装段階
+   ├─ shadcn/uiコンポーネントの活用
+   ├─ 適切なARIA属性の追加
+   ├─ フォーカス管理の実装
+   └─ エラーハンドリングの実装
+
+3. テスト段階
+   ├─ axeなどの自動テスト
+   ├─ キーボードのみでの操作確認
+   ├─ スクリーンリーダーでの確認
+   └─ ズーム200%での表示確認
+
+4. レビュー段階
+   ├─ WCAG 2.1チェックリスト確認
+   ├─ JIS X 8341-3:2016適合確認
+   └─ ユーザビリティテスト
+
+5. デプロイ後
+   ├─ 継続的なモニタリング
+   ├─ ユーザーフィードバックの収集
+   └─ 定期的な改善
+```
+
+### 20.3 最終チェックリスト
+
+#### WCAG 2.1 レベルAA 必須項目
+- [ ] 1.1.1: すべての非テキストコンテンツに代替テキスト
+- [ ] 1.3.1: 情報と関係性をプログラムで解釈可能
+- [ ] 1.4.3: コントラスト比4.5:1以上（通常テキスト）
+- [ ] 2.1.1: すべての機能がキーボードで操作可能
+- [ ] 2.4.2: ページタイトルの提供
+- [ ] 2.4.7: フォーカスの可視化
+- [ ] 3.1.1: ページの言語を指定
+- [ ] 3.2.2: 入力時の予期しないコンテキスト変更なし
+- [ ] 3.3.1: エラーの特定と説明
+- [ ] 3.3.2: ラベルまたは説明の提供
+- [ ] 4.1.2: 名前・役割・値の提供
+
+#### JIS X 8341-3:2016 追加確認項目
+- [ ] 日本語コンテンツでの適切な読み上げ
+- [ ] 和暦・西暦の併記（必要に応じて）
+- [ ] 日本固有のUI慣習への配慮
+
+---
+
+このルールに従うことで、すべてのユーザーにとってアクセシブルで使いやすいUIを実現できます。
+アクセシビリティは「あとから追加する」ものではなく、「最初から組み込む」ものです。
